@@ -1,0 +1,886 @@
+package tools
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/sstraus/mcpmaccontrol/internal/input"
+)
+
+func TestValidateAction_MissingType(t *testing.T) {
+	action := Action{}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for missing type")
+	}
+	if !strings.Contains(err.Error(), `Missing "type" field`) {
+		t.Errorf("error should mention missing type field, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "Valid types:") {
+		t.Error("error should list valid types")
+	}
+}
+
+func TestValidateAction_UnknownType(t *testing.T) {
+	action := Action{Type: "unknown_action"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for unknown type")
+	}
+	if !strings.Contains(err.Error(), `Unknown action type: "unknown_action"`) {
+		t.Errorf("error should mention unknown type, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "Did you mean") {
+		t.Error("error should suggest valid types")
+	}
+}
+
+func TestValidateAction_ClickMissingApp(t *testing.T) {
+	action := Action{Type: "click", X: 100, Y: 50}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for click without app")
+	}
+	if !strings.Contains(err.Error(), `requires "app" field`) {
+		t.Errorf("error should mention missing app, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "list_windows()") {
+		t.Error("error should suggest list_windows()")
+	}
+}
+
+func TestValidateAction_ClickInvalidButton(t *testing.T) {
+	action := Action{Type: "click", App: "Safari", X: 100, Y: 50, Button: "invalid"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for invalid button")
+	}
+	if !strings.Contains(err.Error(), `Invalid button: "invalid"`) {
+		t.Errorf("error should mention invalid button, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "left (default), right, middle") {
+		t.Error("error should list valid buttons")
+	}
+}
+
+func TestValidateAction_ClickValid(t *testing.T) {
+	tests := []struct {
+		name   string
+		action Action
+	}{
+		{"basic click", Action{Type: "click", App: "Safari", X: 100, Y: 50}},
+		{"right click", Action{Type: "click", App: "Safari", X: 100, Y: 50, Button: "right"}},
+		{"middle click", Action{Type: "click", App: "Safari", X: 100, Y: 50, Button: "middle"}},
+		{"double click", Action{Type: "click", App: "Safari", X: 100, Y: 50, Double: true}},
+		{"right double click", Action{Type: "click", App: "Finder", X: 200, Y: 100, Button: "right", Double: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAction(0, tt.action)
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAction_MoveMissingApp(t *testing.T) {
+	action := Action{Type: "move", X: 100, Y: 50}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for move without app")
+	}
+	if !strings.Contains(err.Error(), `requires "app" field`) {
+		t.Errorf("error should mention missing app, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_MoveValid(t *testing.T) {
+	action := Action{Type: "move", App: "Safari", X: 300, Y: 200}
+	err := validateAction(0, action)
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+func TestValidateAction_TypeMissingText(t *testing.T) {
+	action := Action{Type: "type"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for type without text")
+	}
+	if !strings.Contains(err.Error(), `requires "text" field`) {
+		t.Errorf("error should mention missing text, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "Correct format:") {
+		t.Error("error should show correct format")
+	}
+}
+
+func TestValidateAction_TypeValid(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+	}{
+		{"simple text", "hello"},
+		{"with spaces", "hello world"},
+		{"with special chars", "user@example.com"},
+		{"with punctuation", "Hello, World!"},
+		{"with numbers", "test123"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := Action{Type: "type", Text: tt.text}
+			err := validateAction(0, action)
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAction_KeyMissingKey(t *testing.T) {
+	action := Action{Type: "key"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for key without key field")
+	}
+	if !strings.Contains(err.Error(), `requires "key" field`) {
+		t.Errorf("error should mention missing key, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "Valid keys:") {
+		t.Error("error should list valid keys")
+	}
+}
+
+func TestValidateAction_KeyUnknownKey(t *testing.T) {
+	action := Action{Type: "key", Key: "unknown_key"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for unknown key")
+	}
+	if !strings.Contains(err.Error(), `Unknown key: "unknown_key"`) {
+		t.Errorf("error should mention unknown key, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_KeyUnknownModifier(t *testing.T) {
+	action := Action{Type: "key", Key: "a", Modifiers: []string{"invalid"}}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for unknown modifier")
+	}
+	if !strings.Contains(err.Error(), `Unknown modifier: "invalid"`) {
+		t.Errorf("error should mention unknown modifier, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_KeyValid(t *testing.T) {
+	tests := []struct {
+		name      string
+		key       string
+		modifiers []string
+	}{
+		// Letters
+		{"letter a", "a", nil},
+		{"letter z", "z", nil},
+		// Numbers
+		{"number 0", "0", nil},
+		{"number 9", "9", nil},
+		// Special keys
+		{"tab", "tab", nil},
+		{"enter", "enter", nil},
+		{"return", "return", nil},
+		{"escape", "escape", nil},
+		{"esc", "esc", nil},
+		{"delete", "delete", nil},
+		{"backspace", "backspace", nil},
+		{"space", "space", nil},
+		// Arrow keys
+		{"left", "left", nil},
+		{"right", "right", nil},
+		{"up", "up", nil},
+		{"down", "down", nil},
+		// Function keys
+		{"f1", "f1", nil},
+		{"f12", "f12", nil},
+		// With modifiers
+		{"cmd+c", "c", []string{"cmd"}},
+		{"cmd+v", "v", []string{"cmd"}},
+		{"cmd+1", "1", []string{"cmd"}},
+		{"shift+tab", "tab", []string{"shift"}},
+		{"cmd+shift+z", "z", []string{"cmd", "shift"}},
+		// Modifier aliases
+		{"command+a", "a", []string{"command"}},
+		{"option+a", "a", []string{"option"}},
+		{"opt+a", "a", []string{"opt"}},
+		{"control+a", "a", []string{"control"}},
+		{"ctrl+a", "a", []string{"ctrl"}},
+		{"alt+a", "a", []string{"alt"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := Action{Type: "key", Key: tt.key, Modifiers: tt.modifiers}
+			err := validateAction(0, action)
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAction_WaitZeroMs(t *testing.T) {
+	action := Action{Type: "wait", Ms: 0}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for wait with 0 ms")
+	}
+	if !strings.Contains(err.Error(), `requires positive "ms" value`) {
+		t.Errorf("error should mention positive ms, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_WaitNegativeMs(t *testing.T) {
+	action := Action{Type: "wait", Ms: -100}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for wait with negative ms")
+	}
+	if !strings.Contains(err.Error(), "must be positive") {
+		t.Errorf("error should mention positive, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_WaitValid(t *testing.T) {
+	tests := []struct {
+		name string
+		ms   int
+	}{
+		{"100ms", 100},
+		{"500ms", 500},
+		{"1 second", 1000},
+		{"5 seconds", 5000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := Action{Type: "wait", Ms: tt.ms}
+			err := validateAction(0, action)
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAction_ScrollMissingApp(t *testing.T) {
+	action := Action{Type: "scroll", X: 100, Y: 100, DeltaY: -50}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for scroll without app")
+	}
+	if !strings.Contains(err.Error(), `requires "app" field`) {
+		t.Errorf("error should mention missing app, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_ScrollMissingDelta(t *testing.T) {
+	action := Action{Type: "scroll", App: "Safari", X: 100, Y: 100}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for scroll without delta")
+	}
+	if !strings.Contains(err.Error(), `requires "delta_y" and/or "delta_x"`) {
+		t.Errorf("error should mention missing delta, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_ScrollValid(t *testing.T) {
+	tests := []struct {
+		name   string
+		deltaY int
+		deltaX int
+	}{
+		{"scroll up", -100, 0},
+		{"scroll down", 100, 0},
+		{"scroll left", 0, -50},
+		{"scroll right", 0, 50},
+		{"diagonal scroll", -50, 30},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := Action{Type: "scroll", App: "Safari", X: 400, Y: 300, DeltaY: tt.deltaY, DeltaX: tt.deltaX}
+			err := validateAction(0, action)
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAction_WindowActionsValid(t *testing.T) {
+	// Window actions that only need app
+	simpleWindowActions := []string{"focus", "minimize", "restore", "close"}
+
+	for _, actionType := range simpleWindowActions {
+		t.Run(actionType, func(t *testing.T) {
+			action := Action{Type: actionType, App: "Safari"}
+			err := validateAction(0, action)
+			if err != nil {
+				t.Errorf("validation should pass for %s, got: %v", actionType, err)
+			}
+		})
+	}
+
+	// Resize needs width and height
+	t.Run("resize", func(t *testing.T) {
+		action := Action{Type: "resize", App: "Safari", Width: 800, Height: 600}
+		err := validateAction(0, action)
+		if err != nil {
+			t.Errorf("validation should pass for resize, got: %v", err)
+		}
+	})
+}
+
+func TestValidateAction_WindowActionsMissingApp(t *testing.T) {
+	windowActions := []string{"focus", "minimize", "restore", "close"}
+
+	for _, actionType := range windowActions {
+		t.Run(actionType, func(t *testing.T) {
+			action := Action{Type: actionType}
+			err := validateAction(0, action)
+			if err == nil {
+				t.Errorf("expected error for %s without app", actionType)
+			}
+			if !strings.Contains(err.Error(), `requires "app" field`) {
+				t.Errorf("error should mention missing app, got: %s", err.Error())
+			}
+		})
+	}
+}
+
+func TestValidateAction_ResizeMissingDimensions(t *testing.T) {
+	action := Action{Type: "resize", App: "Safari"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for resize without dimensions")
+	}
+	if !strings.Contains(err.Error(), `requires positive "width" and "height"`) {
+		t.Errorf("error should mention missing dimensions, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		name   string
+		action Action
+	}{
+		{"uppercase type", Action{Type: "CLICK", App: "Safari", X: 100, Y: 50}},
+		{"mixed case type", Action{Type: "Click", App: "Safari", X: 100, Y: 50}},
+		{"uppercase key", Action{Type: "key", Key: "ENTER"}},
+		{"mixed case button", Action{Type: "click", App: "Safari", X: 100, Y: 50, Button: "Right"}},
+		{"uppercase modifier", Action{Type: "key", Key: "c", Modifiers: []string{"CMD"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAction(0, tt.action)
+			if err != nil {
+				t.Errorf("expected no error for case-insensitive input, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateAction_ActionIndex(t *testing.T) {
+	// Verify error messages include correct action index
+	tests := []struct {
+		index  int
+		action Action
+	}{
+		{0, Action{Type: "click"}}, // missing app
+		{3, Action{Type: "click"}},
+		{10, Action{Type: "click"}},
+	}
+
+	for _, tt := range tests {
+		indexStr := fmt.Sprintf("%d", tt.index)
+		t.Run("index "+indexStr, func(t *testing.T) {
+			err := validateAction(tt.index, tt.action)
+			if err == nil {
+				t.Error("expected error")
+			}
+			expectedPrefix := "[Action " + indexStr + "]"
+			if !strings.Contains(err.Error(), expectedPrefix) {
+				t.Errorf("error should contain %s, got: %s", expectedPrefix, err.Error())
+			}
+		})
+	}
+}
+
+func TestFormatMissingActionsError(t *testing.T) {
+	err := formatMissingActionsError()
+	if !strings.Contains(err, `Missing "actions" parameter`) {
+		t.Error("should mention missing actions")
+	}
+	if !strings.Contains(err, "Correct format:") {
+		t.Error("should show correct format")
+	}
+	if !strings.Contains(err, "help(") {
+		t.Error("should reference help")
+	}
+}
+
+func TestFormatEmptyActionsError(t *testing.T) {
+	err := formatEmptyActionsError()
+	if !strings.Contains(err, "empty") {
+		t.Error("should mention empty")
+	}
+	if !strings.Contains(err, "Example:") {
+		t.Error("should show example")
+	}
+}
+
+func TestFormatParseError(t *testing.T) {
+	err := formatParseError(nil)
+	if !strings.Contains(err, "Common mistakes:") {
+		t.Error("should show common mistakes")
+	}
+	if !strings.Contains(err, "Object instead of array") {
+		t.Error("should mention object vs array mistake")
+	}
+}
+
+// Test that valid action types list is complete
+func TestValidActionTypes(t *testing.T) {
+	expected := []string{"click", "move", "type", "key", "wait", "scroll", "focus", "minimize", "restore", "close", "resize"}
+	for _, e := range expected {
+		found := false
+		for _, v := range ValidActionTypes {
+			if v == e {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ValidActionTypes missing: %s", e)
+		}
+	}
+}
+
+// Test that valid keys list includes common keys
+func TestValidKeysComplete(t *testing.T) {
+	required := []string{
+		"a", "z", "0", "9",
+		"tab", "enter", "escape", "delete", "space",
+		"left", "right", "up", "down",
+		"f1", "f12",
+	}
+	for _, k := range required {
+		found := false
+		for _, v := range ValidKeys {
+			if v == k {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ValidKeys missing: %s", k)
+		}
+	}
+}
+
+// Test that valid modifiers list includes all aliases
+func TestValidModifiersComplete(t *testing.T) {
+	required := []string{"cmd", "command", "shift", "alt", "option", "opt", "ctrl", "control"}
+	for _, m := range required {
+		found := false
+		for _, v := range ValidModifiers {
+			if v == m {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ValidModifiers missing: %s", m)
+		}
+	}
+}
+
+func TestNormalizeAction_CompoundKey(t *testing.T) {
+	tests := []struct {
+		name          string
+		key           string
+		modifiers     StringOrArray
+		wantKey       string
+		wantModifiers StringOrArray
+	}{
+		{
+			name:          "cmd+shift+g",
+			key:           "cmd+shift+g",
+			wantKey:       "g",
+			wantModifiers: StringOrArray{"cmd", "shift"},
+		},
+		{
+			name:          "ctrl+c",
+			key:           "ctrl+c",
+			wantKey:       "c",
+			wantModifiers: StringOrArray{"ctrl"},
+		},
+		{
+			name:          "plain key unchanged",
+			key:           "enter",
+			wantKey:       "enter",
+			wantModifiers: nil,
+		},
+		{
+			name:          "compound with existing modifiers",
+			key:           "shift+g",
+			modifiers:     StringOrArray{"cmd"},
+			wantKey:       "g",
+			wantModifiers: StringOrArray{"shift", "cmd"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := Action{Type: "key", Key: tt.key, Modifiers: tt.modifiers}
+			normalizeAction(&action)
+			assert.Equal(t, tt.wantKey, action.Key)
+			assert.Equal(t, tt.wantModifiers, action.Modifiers)
+		})
+	}
+}
+
+func TestNormalizeAction_AppNameToApp(t *testing.T) {
+	action := Action{AppName: "Safari"}
+	normalizeAction(&action)
+	if action.App != "Safari" {
+		t.Errorf("expected app to be 'Safari', got: %s", action.App)
+	}
+}
+
+func TestNormalizeAction_AppNameIgnoredIfAppSet(t *testing.T) {
+	action := Action{App: "Finder", AppName: "Safari"}
+	normalizeAction(&action)
+	if action.App != "Finder" {
+		t.Errorf("expected app to remain 'Finder', got: %s", action.App)
+	}
+}
+
+func TestNormalizeAction_DurationToMs(t *testing.T) {
+	action := Action{Duration: 1.5} // 1.5 seconds
+	normalizeAction(&action)
+	if action.Ms != 1500 {
+		t.Errorf("expected ms to be 1500, got: %d", action.Ms)
+	}
+}
+
+func TestNormalizeAction_DurationIgnoredIfMsSet(t *testing.T) {
+	action := Action{Ms: 500, Duration: 2.0}
+	normalizeAction(&action)
+	if action.Ms != 500 {
+		t.Errorf("expected ms to remain 500, got: %d", action.Ms)
+	}
+}
+
+func TestFormatActionsHelp(t *testing.T) {
+	help := formatActionsHelp()
+	if !strings.Contains(help, "Expected format:") {
+		t.Error("should contain expected format header")
+	}
+	if !strings.Contains(help, "do({") {
+		t.Error("should show do() call format")
+	}
+	if !strings.Contains(help, "help(\"actions\")") {
+		t.Error("should reference help command")
+	}
+}
+
+func TestValidateAction_ResizeWithOnlyWidth(t *testing.T) {
+	action := Action{Type: "resize", App: "Safari", Width: 800}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for resize with only width")
+	}
+	if !strings.Contains(err.Error(), `requires positive "width" and "height"`) {
+		t.Errorf("error should mention both dimensions required, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_ResizeWithOnlyHeight(t *testing.T) {
+	action := Action{Type: "resize", App: "Safari", Height: 600}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for resize with only height")
+	}
+}
+
+func TestValidateAction_ResizeWithZeroWidth(t *testing.T) {
+	action := Action{Type: "resize", App: "Safari", Width: 0, Height: 600}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for resize with zero width")
+	}
+}
+
+func TestValidateAction_ResizeWithNegativeDimensions(t *testing.T) {
+	action := Action{Type: "resize", App: "Safari", Width: -100, Height: 600}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for resize with negative width")
+	}
+}
+
+// --- paste action tests ---
+
+func TestValidateAction_PasteMissingText(t *testing.T) {
+	action := Action{Type: "paste"}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for paste without text")
+	}
+	if !strings.Contains(err.Error(), `requires "text" field`) {
+		t.Errorf("error should mention missing text, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_PasteValid(t *testing.T) {
+	tests := []struct {
+		name string
+		text string
+	}{
+		{"simple path", "/tmp/file.txt"},
+		{"url", "https://example.com"},
+		{"unicode", "Hello 世界"},
+		{"multiline", "line1\nline2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := Action{Type: "paste", Text: tt.text}
+			err := validateAction(0, action)
+			if err != nil {
+				t.Errorf("expected no error, got: %v", err)
+			}
+		})
+	}
+}
+
+// --- clipboard action tests ---
+
+func TestValidateAction_ClipboardValid(t *testing.T) {
+	action := Action{Type: "clipboard"}
+	err := validateAction(0, action)
+	if err != nil {
+		t.Errorf("expected no error for clipboard read, got: %v", err)
+	}
+}
+
+// --- drag action tests ---
+
+func TestValidateAction_DragMissingApp(t *testing.T) {
+	action := Action{Type: "drag", X: 100, Y: 100, Width: 200, Height: 200}
+	err := validateAction(0, action)
+	if err == nil {
+		t.Error("expected error for drag without app")
+	}
+	if !strings.Contains(err.Error(), `requires "app" field`) {
+		t.Errorf("error should mention missing app, got: %s", err.Error())
+	}
+}
+
+func TestValidateAction_DragValid(t *testing.T) {
+	action := Action{Type: "drag", App: "Finder", X: 100, Y: 100, ToX: 300, ToY: 300}
+	err := validateAction(0, action)
+	if err != nil {
+		t.Errorf("expected no error, got: %v", err)
+	}
+}
+
+// --- ValidActionTypes includes new actions ---
+
+func TestValidActionTypes_IncludesNewActions(t *testing.T) {
+	newActions := []string{"paste", "clipboard", "drag"}
+	for _, a := range newActions {
+		found := false
+		for _, v := range ValidActionTypes {
+			if v == a {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ValidActionTypes missing: %s", a)
+		}
+	}
+}
+
+// --- StringOrArray UnmarshalJSON tests ---
+
+func TestStringOrArray_UnmarshalString(t *testing.T) {
+	var s StringOrArray
+	err := json.Unmarshal([]byte(`"cmd"`), &s)
+	require.NoError(t, err)
+	assert.Equal(t, StringOrArray{"cmd"}, s)
+}
+
+func TestStringOrArray_UnmarshalArray(t *testing.T) {
+	var s StringOrArray
+	err := json.Unmarshal([]byte(`["cmd", "shift"]`), &s)
+	require.NoError(t, err)
+	assert.Equal(t, StringOrArray{"cmd", "shift"}, s)
+}
+
+func TestStringOrArray_UnmarshalInvalid(t *testing.T) {
+	var s StringOrArray
+	err := json.Unmarshal([]byte(`123`), &s)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "modifiers must be a string or array")
+}
+
+func TestStringOrArray_UnmarshalEmptyArray(t *testing.T) {
+	var s StringOrArray
+	err := json.Unmarshal([]byte(`[]`), &s)
+	require.NoError(t, err)
+	assert.Equal(t, StringOrArray{}, s)
+}
+
+// --- formatResults tests ---
+
+func TestFormatResults_AllSuccess(t *testing.T) {
+	results := []ActionResult{
+		{Index: 0, Type: "click", Success: true, Message: "click at (100,50) in Safari"},
+		{Index: 1, Type: "type", Success: true, Message: "typed 5 chars"},
+	}
+	out := formatResults(results)
+	text := out.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text, "[0] click: click at (100,50)")
+	assert.Contains(t, text, "[1] type: typed 5 chars")
+	assert.NotContains(t, text, "stopped on first error")
+}
+
+func TestFormatResults_WithError(t *testing.T) {
+	results := []ActionResult{
+		{Index: 0, Type: "click", Success: true, Message: "click ok"},
+		{Index: 1, Type: "type", Success: false, Error: "something failed"},
+	}
+	out := formatResults(results)
+	text := out.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text, "[0] click: click ok")
+	assert.Contains(t, text, "[1] type: ERROR")
+	assert.Contains(t, text, "something failed")
+	assert.Contains(t, text, "stopped on first error")
+}
+
+func TestFormatResults_SingleError(t *testing.T) {
+	results := []ActionResult{
+		{Index: 0, Type: "key", Success: false, Error: "key tap failed"},
+	}
+	out := formatResults(results)
+	text := out.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text, "key tap failed")
+	assert.Contains(t, text, "stopped on first error")
+}
+
+// --- executeWait test ---
+
+func TestExecuteWait_ReturnsCorrectMessage(t *testing.T) {
+	result := executeWait(0, Action{Type: "wait", Ms: 50})
+	assert.True(t, result.Success)
+	assert.Equal(t, "wait", result.Type)
+	assert.Equal(t, "waited 50ms", result.Message)
+	assert.Equal(t, 0, result.Index)
+}
+
+// --- executeAction routing tests ---
+
+func TestExecuteAction_UnknownType(t *testing.T) {
+	result := executeAction(0, Action{Type: "nonexistent"})
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Error, "unknown action type")
+}
+
+func TestExecuteAction_WaitRoute(t *testing.T) {
+	result := executeAction(0, Action{Type: "wait", Ms: 10})
+	assert.True(t, result.Success)
+	assert.Equal(t, "wait", result.Type)
+}
+
+// --- executeClipboard test (no permissions needed) ---
+
+func TestExecuteClipboard_ReadsClipboard(t *testing.T) {
+	// Set clipboard to known value, then read via executeClipboard
+	err := input.SetClipboard("test-clipboard-content")
+	require.NoError(t, err)
+
+	result := executeClipboard(0, Action{Type: "clipboard"})
+	assert.True(t, result.Success)
+	assert.Equal(t, "clipboard", result.Type)
+	assert.Equal(t, "test-clipboard-content", result.Message)
+}
+
+func TestExecuteClipboard_EmptyClipboard(t *testing.T) {
+	err := input.SetClipboard("")
+	require.NoError(t, err)
+
+	result := executeClipboard(0, Action{Type: "clipboard"})
+	assert.True(t, result.Success)
+	assert.Equal(t, "", result.Message)
+}
+
+// --- executePaste test (clipboard write + KeyTap) ---
+
+func TestExecutePaste_Success(t *testing.T) {
+	// Set clipboard to something else first to prove paste changes it
+	err := input.SetClipboard("before-paste")
+	require.NoError(t, err)
+
+	result := executePaste(0, Action{Type: "paste", Text: "paste-via-execute"})
+	assert.True(t, result.Success)
+	assert.Equal(t, "paste", result.Type)
+	assert.Contains(t, result.Message, "pasted 17 chars via clipboard")
+
+	// Verify the clipboard was actually written
+	got, err := input.GetClipboard()
+	require.NoError(t, err)
+	assert.Equal(t, "paste-via-execute", got)
+}
+
+func TestExecutePaste_PreservesIndex(t *testing.T) {
+	result := executePaste(5, Action{Type: "paste", Text: "idx-test"})
+	assert.True(t, result.Success)
+	assert.Equal(t, 5, result.Index)
+}
+
+// --- executeDrag test (requires window; test error path) ---
+
+func TestExecuteDrag_NoSuchApp(t *testing.T) {
+	result := executeDrag(0, Action{Type: "drag", App: "NonExistentApp12345", X: 10, Y: 10, ToX: 50, ToY: 50})
+	assert.False(t, result.Success)
+	assert.Equal(t, "drag", result.Type)
+	assert.Contains(t, result.Error, "list_windows()")
+}
+
+// --- executeType test (no permissions needed for the function itself) ---
+
+func TestExecuteType_ReturnsCharCount(t *testing.T) {
+	// executeType just calls input.TypeText and reports count.
+	// TypeText sends CGEvents which need accessibility, but the function
+	// itself returns a result struct regardless. We can't verify the typing
+	// happened, but we can verify the result formatting.
+	// Skip if accessibility isn't available since TypeText will silently fail.
+	result := executeType(0, Action{Type: "type", Text: "hello"})
+	assert.True(t, result.Success)
+	assert.Equal(t, "type", result.Type)
+	assert.Equal(t, "typed 5 chars", result.Message)
+}

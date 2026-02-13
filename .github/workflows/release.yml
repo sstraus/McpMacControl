@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need tags for version string
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Import signing certificate
+        env:
+          DEVELOPER_ID_CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          # Create a temporary keychain for CI
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 16)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import the Developer ID certificate
+          CERT_PATH=$RUNNER_TEMP/cert.p12
+          echo "$DEVELOPER_ID_CERT_BASE64" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$DEVELOPER_ID_CERT_PASSWORD" \
+            -T /usr/bin/codesign
+          rm -f "$CERT_PATH"
+
+          # Allow codesign to access the keychain without prompting
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Add CI keychain to the search list (prepend so it's found first)
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+          # Extract the signing identity name for later steps
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application:" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Build signed .app bundle
+        env:
+          CGO_ENABLED: 1
+        run: make build SIGN_IDENTITY="$SIGN_IDENTITY"
+
+      - name: Notarize
+        env:
+          NOTARIZE_KEY_ID: ${{ secrets.NOTARIZE_KEY_ID }}
+          NOTARIZE_ISSUER_ID: ${{ secrets.NOTARIZE_ISSUER_ID }}
+          NOTARIZE_KEY_BASE64: ${{ secrets.NOTARIZE_KEY_BASE64 }}
+        run: |
+          # Write the API key to a file
+          KEY_PATH=$RUNNER_TEMP/notarize-key.p8
+          echo "$NOTARIZE_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+
+          # Submit for notarization
+          ditto -c -k --keepParent build/MCPMacControl.app /tmp/MCPMacControl.zip
+          xcrun notarytool submit /tmp/MCPMacControl.zip \
+            --key "$KEY_PATH" \
+            --key-id "$NOTARIZE_KEY_ID" \
+            --issuer "$NOTARIZE_ISSUER_ID" \
+            --wait
+          rm -f "$KEY_PATH" /tmp/MCPMacControl.zip
+
+          # Staple the notarization ticket to the .app
+          xcrun stapler staple build/MCPMacControl.app
+
+      - name: Create release zip
+        run: |
+          cd build
+          ditto -c -k --keepParent MCPMacControl.app MCPMacControl.app.zip
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/MCPMacControl.app.zip
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
