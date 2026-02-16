@@ -1,5 +1,11 @@
 # MCPMacControl
 
+[![Release](https://img.shields.io/github/v/release/sstraus/mcpmaccontrol)](https://github.com/sstraus/mcpmaccontrol/releases/latest)
+[![Build](https://img.shields.io/github/actions/workflow/status/sstraus/mcpmaccontrol/release.yml)](https://github.com/sstraus/mcpmaccontrol/actions)
+[![Go](https://img.shields.io/github/go-mod/go-version/sstraus/mcpmaccontrol)](go.mod)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple)](https://github.com/sstraus/mcpmaccontrol)
+
 MCP server for **Mouse, Keyboard, Screenshot, Window & Shell Control** on macOS.
 
 Enables AI to control Mac UI: capture screenshots, move/click mouse, type text, press keyboard shortcuts, scroll/resize/minimize windows, and run interactive shell sessions.
