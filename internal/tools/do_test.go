@@ -594,6 +594,26 @@ func TestNormalizeAction_DurationIgnoredIfMsSet(t *testing.T) {
 	}
 }
 
+func TestNormalizeAction_MousePrefixStripped(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"mouse_move", "move"},
+		{"mouse_click", "click"},
+		{"Mouse_Scroll", "scroll"},
+		{"MOUSE_DRAG", "drag"},
+		{"click", "click"}, // no prefix — unchanged
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			action := Action{Type: tt.input}
+			normalizeAction(&action)
+			assert.Equal(t, tt.want, action.Type)
+		})
+	}
+}
+
 func TestFormatActionsHelp(t *testing.T) {
 	help := formatActionsHelp()
 	if !strings.Contains(help, "Expected format:") {

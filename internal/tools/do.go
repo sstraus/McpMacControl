@@ -70,6 +70,10 @@ type Action struct {
 
 // normalizeAction converts aliases to canonical field names.
 func normalizeAction(action *Action) {
+	// mouse_move → move, mouse_click → click, etc.
+	if strings.HasPrefix(strings.ToLower(action.Type), "mouse_") {
+		action.Type = strings.TrimPrefix(strings.ToLower(action.Type), "mouse_")
+	}
 	// app_name → app
 	if action.App == "" && action.AppName != "" {
 		action.App = action.AppName
