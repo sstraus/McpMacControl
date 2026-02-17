@@ -159,17 +159,21 @@ func listWindowsDarwin(filter string) ([]WindowInfo, error) {
 		ownerName := C.GoString(ownerNameC)
 		C.free(unsafe.Pointer(ownerNameC))
 
-		// Apply filter if provided
-		if filter != "" && !strings.Contains(strings.ToLower(ownerName), filterLower) {
-			continue
-		}
-
-		// Get window name (may be empty)
+		// Get window name (may be empty) — fetched before filter so we can match on it
 		windowName := ""
 		windowNameC := C.getWindowName(window)
 		if windowNameC != nil {
 			windowName = C.GoString(windowNameC)
 			C.free(unsafe.Pointer(windowNameC))
+		}
+
+		// Apply filter: match against owner name OR window title
+		if filter != "" {
+			ownerMatch := strings.Contains(strings.ToLower(ownerName), filterLower)
+			titleMatch := windowName != "" && strings.Contains(strings.ToLower(windowName), filterLower)
+			if !ownerMatch && !titleMatch {
+				continue
+			}
 		}
 
 		// Get window ID

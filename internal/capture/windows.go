@@ -16,7 +16,7 @@ type WindowInfo struct {
 
 // ListWindows returns all visible windows on the system.
 // The filter parameter is optional; if provided, only windows with matching
-// owner name (case-insensitive substring) are returned.
+// owner name or window title (case-insensitive substring) are returned.
 func ListWindows(filter string) ([]WindowInfo, error) {
 	return listWindowsDarwin(filter)
 }
