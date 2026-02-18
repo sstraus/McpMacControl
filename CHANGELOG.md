@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 ### Features
 - **Action notifications** — plays a "Tink" sound and flashes an orange border overlay on all displays before mouse, keyboard, scroll, and drag actions so the user knows automation is happening
