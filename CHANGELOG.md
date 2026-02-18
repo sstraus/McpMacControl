@@ -6,6 +6,9 @@
 - **Action notifications** — plays a "Tink" sound and flashes an orange border overlay on all displays before mouse, keyboard, scroll, and drag actions so the user knows automation is happening
 - **Menu bar toggle** — "Notify on Actions" checkbox in the systray context menu to enable/disable notifications (enabled by default)
 
+### Fixes
+- **Stale socket recovery** — when the backend `.app` crashes and leaves a socket file behind, the bridge now detects the stale socket during launch (dial succeeds but MCP handshake fails), removes it, and starts a fresh backend instead of returning "broken pipe"
+
 ## 1.0.0
 
 Initial release.
