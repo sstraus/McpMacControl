@@ -75,6 +75,10 @@ func normalizeAction(action *Action) {
 	if strings.HasPrefix(strings.ToLower(action.Type), "mouse_") {
 		action.Type = strings.TrimPrefix(strings.ToLower(action.Type), "mouse_")
 	}
+	// hover → move
+	if strings.EqualFold(action.Type, "hover") {
+		action.Type = "move"
+	}
 	// app_name → app
 	if action.App == "" && action.AppName != "" {
 		action.App = action.AppName
