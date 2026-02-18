@@ -158,35 +158,50 @@ func (p *lazyProxy) resetConnection() {
 // launchBackend connects to an existing .app or launches a new one.
 // It first tries to connect to the well-known socket. If that succeeds,
 // the existing .app is reused. Otherwise, a new .app is launched.
+// If the socket exists but the MCP handshake fails (stale socket from a
+// crashed backend), it cleans up and falls through to a fresh launch.
 func (p *lazyProxy) launchBackend(ctx context.Context) error {
 	// Try connecting to an already-running .app instance.
 	conn, err := net.DialTimeout("unix", p.sockPath, 500*time.Millisecond)
-	if err != nil {
-		// No existing instance — launch a new one.
-		log.Printf("Launching backend: %s", p.appPath)
-		if err := p.launcher(p.appPath, p.sockPath); err != nil {
-			return fmt.Errorf("launch .app: %w", err)
-		}
-
-		conn, err = waitForSocket(p.sockPath)
-		if err != nil {
-			return fmt.Errorf("connect to server: %w", err)
-		}
-	} else {
+	if err == nil {
 		log.Printf("Reusing existing backend at %s", p.sockPath)
+		if err := p.handshake(ctx, conn); err == nil {
+			return nil
+		}
+		// Handshake failed — stale socket from a dead backend.
+		log.Printf("Stale socket detected, removing %s and launching fresh backend", p.sockPath)
+		conn.Close()
+		os.Remove(p.sockPath)
 	}
-	p.conn = conn
 
-	// Create MCP client over the socket connection.
+	// Launch a new .app instance.
+	log.Printf("Launching backend: %s", p.appPath)
+	if err := p.launcher(p.appPath, p.sockPath); err != nil {
+		return fmt.Errorf("launch .app: %w", err)
+	}
+
+	conn, err = waitForSocket(p.sockPath)
+	if err != nil {
+		return fmt.Errorf("connect to server: %w", err)
+	}
+
+	if err := p.handshake(ctx, conn); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handshake creates an MCP client over conn and performs the protocol
+// initialization. On success, it sets p.conn and p.client.
+func (p *lazyProxy) handshake(ctx context.Context, conn net.Conn) error {
 	t := transport.NewIO(conn, writeCloser{conn}, io.NopCloser(strings.NewReader("")))
-	p.client = client.NewClient(t)
+	c := client.NewClient(t)
 
-	if err := p.client.Start(ctx); err != nil {
+	if err := c.Start(ctx); err != nil {
 		return fmt.Errorf("start MCP client: %w", err)
 	}
 
-	// Initialize the MCP session with the .app server.
-	_, err = p.client.Initialize(ctx, mcp.InitializeRequest{
+	if _, err := c.Initialize(ctx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			ClientInfo: mcp.Implementation{
@@ -194,11 +209,12 @@ func (p *lazyProxy) launchBackend(ctx context.Context) error {
 				Version: "1.0.0",
 			},
 		},
-	})
-	if err != nil {
+	}); err != nil {
 		return fmt.Errorf("initialize backend: %w", err)
 	}
 
+	p.conn = conn
+	p.client = c
 	log.Printf("Backend connected via %s", p.sockPath)
 	return nil
 }

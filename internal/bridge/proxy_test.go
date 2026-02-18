@@ -471,6 +471,60 @@ func TestLazyProxy_ToolCallTimeout(t *testing.T) {
 	assert.Contains(t, textContent.Text, "not respond")
 }
 
+func TestLazyProxy_StaleSocketRecovery(t *testing.T) {
+	var launchCount atomic.Int32
+
+	tb := newTestBackend(t)
+
+	// Create a stale socket: a listener that accepts connections but
+	// immediately closes them — simulates a crashed backend whose socket
+	// file survived but can't complete the MCP handshake.
+	staleListener, err := net.Listen("unix", tb.sockPath)
+	require.NoError(t, err)
+	go func() {
+		for {
+			conn, err := staleListener.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close() // Immediately close — MCP handshake will fail.
+		}
+	}()
+
+	proxy := &lazyProxy{
+		appPath:  "/fake/app.app",
+		sockPath: tb.sockPath,
+		launcher: func(_, _ string) error {
+			launchCount.Add(1)
+			// Close the stale listener before starting the real backend,
+			// so the real backend can bind the socket path.
+			staleListener.Close()
+			tb.start(t)
+			return nil
+		},
+	}
+	defer proxy.close()
+
+	ctx := context.Background()
+
+	// The proxy should detect that the socket is stale (dial succeeds but
+	// MCP handshake fails), clean up, and launch a fresh backend.
+	result, err := proxy.handleToolCall(ctx, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      "echo",
+			Arguments: map[string]any{"message": "after-stale"},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.IsError, "should recover from stale socket: %v", result)
+	assert.Equal(t, int32(1), launchCount.Load(), "launcher should be called once for fresh backend")
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Equal(t, "echo: after-stale", textContent.Text)
+}
+
 func TestLazyProxy_Close_DoesNotRemoveSocket(t *testing.T) {
 	tmpDir := t.TempDir()
 	sockPath := filepath.Join(tmpDir, "cleanup-test.sock")
