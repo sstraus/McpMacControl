@@ -85,6 +85,12 @@ func HandleCaptureWindow(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 
 	boundsInfo += fmt.Sprintf(" (%dx%d)", winInfo.Width, winInfo.Height)
 
+	if winInfo.Focused {
+		boundsInfo += " [focused]"
+	} else {
+		boundsInfo += " [not focused — do() will auto-focus before mouse actions]"
+	}
+
 	if hasRegion {
 		// Region capture - explain coordinate mapping
 		boundsInfo += fmt.Sprintf("\nRegion: x=%d, y=%d, %dx%d", regionX, regionY, regionW, regionH)

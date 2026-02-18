@@ -633,6 +633,9 @@ func executeAction(index int, action Action) ActionResult {
 }
 
 func executeClick(index int, action Action) ActionResult {
+	if errResult := ensureWindowFocused(index, "click", action.App); errResult != nil {
+		return *errResult
+	}
 	button := input.ParseMouseButton(action.Button)
 	absX, absY, err := input.ClickInWindow(action.App, action.X, action.Y, button, action.Double)
 	if err != nil {
@@ -661,6 +664,9 @@ func executeClick(index int, action Action) ActionResult {
 }
 
 func executeMove(index int, action Action) ActionResult {
+	if errResult := ensureWindowFocused(index, "move", action.App); errResult != nil {
+		return *errResult
+	}
 	absX, absY, err := input.MoveMouseToWindow(action.App, action.X, action.Y)
 	if err != nil {
 		return ActionResult{
@@ -726,6 +732,9 @@ func executeWait(index int, action Action) ActionResult {
 }
 
 func executeScroll(index int, action Action) ActionResult {
+	if errResult := ensureWindowFocused(index, "scroll", action.App); errResult != nil {
+		return *errResult
+	}
 	// Move mouse to the scroll position in window, then scroll
 	_, _, err := input.MoveMouseToWindow(action.App, action.X, action.Y)
 	if err != nil {
@@ -785,28 +794,9 @@ func executeClipboard(index int, _ Action) ActionResult {
 }
 
 func executeDrag(index int, action Action) ActionResult {
-	// Focus the target window first. On macOS, dragging a non-frontmost
-	// window's title bar activates it (consuming the mouseDown) instead
-	// of starting a drag gesture.
-	pid, windowIndex, err := findWindowPID(action.App)
-	if err != nil {
-		return ActionResult{
-			Index:   index,
-			Type:    "drag",
-			Success: false,
-			Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
-		}
+	if errResult := ensureWindowFocused(index, "drag", action.App); errResult != nil {
+		return *errResult
 	}
-	if err := input.FocusWindow(pid, windowIndex); err != nil {
-		return ActionResult{
-			Index:   index,
-			Type:    "drag",
-			Success: false,
-			Error:   fmt.Sprintf("failed to focus window: %v", err),
-		}
-	}
-	time.Sleep(100 * time.Millisecond) // let focus settle
-
 	fromAbsX, fromAbsY, toAbsX, toAbsY, err := input.DragInWindow(action.App, action.X, action.Y, action.ToX, action.ToY)
 	if err != nil {
 		return ActionResult{
@@ -840,6 +830,35 @@ func findWindowPID(appName string) (pid int, windowIndex int, err error) {
 	}
 
 	return 0, 0, fmt.Errorf("window not found for app: %s", appName)
+}
+
+// ensureWindowFocused brings the target app's window to front if it is not
+// already the frontmost application. Returns a non-nil ActionResult only on
+// error (caller should return it). Skips the focus + settle delay when the
+// app is already active.
+func ensureWindowFocused(index int, actionType string, appName string) *ActionResult {
+	pid, windowIndex, err := findWindowPID(appName)
+	if err != nil {
+		return &ActionResult{
+			Index:   index,
+			Type:    actionType,
+			Success: false,
+			Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
+		}
+	}
+	if input.IsFrontmostApp(pid) {
+		return nil
+	}
+	if err := input.FocusWindow(pid, windowIndex); err != nil {
+		return &ActionResult{
+			Index:   index,
+			Type:    actionType,
+			Success: false,
+			Error:   fmt.Sprintf("failed to focus window: %v", err),
+		}
+	}
+	time.Sleep(100 * time.Millisecond) // let focus settle
+	return nil
 }
 
 func executeFocus(index int, action Action) ActionResult {

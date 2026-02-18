@@ -139,6 +139,17 @@ func listWindowsDarwin(filter string) ([]WindowInfo, error) {
 	result := make([]WindowInfo, 0, count)
 	filterLower := strings.ToLower(filter)
 
+	// The window list is front-to-back ordered. The first layer-0
+	// window's PID is the frontmost application.
+	frontmostPID := int32(-1)
+	for i := 0; i < count; i++ {
+		w := C.getWindowAt(windows, C.CFIndex(i))
+		if w != 0 && int(C.getWindowLayer(w)) == 0 {
+			frontmostPID = int32(C.getWindowOwnerPID(w))
+			break
+		}
+	}
+
 	for i := 0; i < count; i++ {
 		window := C.getWindowAt(windows, C.CFIndex(i))
 		if window == 0 {
@@ -208,6 +219,7 @@ func listWindowsDarwin(filter string) ([]WindowInfo, error) {
 			Height:    int(height),
 			OnScreen:  onScreen,
 			Layer:     layer,
+			Focused:   int32(ownerPID) == frontmostPID,
 		})
 	}
 

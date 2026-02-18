@@ -37,10 +37,14 @@ func HandleListWindows(_ context.Context, request mcp.CallToolRequest) (*mcp.Cal
 	// Format output
 	var sb strings.Builder
 	for _, w := range windows {
+		focused := ""
+		if w.Focused {
+			focused = " [focused]"
+		}
 		if w.Name != "" {
-			fmt.Fprintf(&sb, "[%d] %s - %s\n", w.ID, w.OwnerName, w.Name)
+			fmt.Fprintf(&sb, "[%d] %s - %s%s\n", w.ID, w.OwnerName, w.Name, focused)
 		} else {
-			fmt.Fprintf(&sb, "[%d] %s\n", w.ID, w.OwnerName)
+			fmt.Fprintf(&sb, "[%d] %s%s\n", w.ID, w.OwnerName, focused)
 		}
 	}
 

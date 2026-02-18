@@ -216,6 +216,22 @@ int resizeWindow(pid_t pid, CFIndex windowIndex, int width, int height) {
     return result;
 }
 
+// Check if an app is the frontmost (active) application
+int isAppFrontmost(pid_t pid) {
+    AXUIElementRef app = AXUIElementCreateApplication(pid);
+    if (app == NULL) return 0;
+
+    CFTypeRef value = NULL;
+    AXError err = AXUIElementCopyAttributeValue(app, kAXFrontmostAttribute, &value);
+    CFRelease(app);
+
+    if (err != kAXErrorSuccess || value == NULL) return 0;
+
+    int result = (CFBooleanGetValue(value)) ? 1 : 0;
+    CFRelease(value);
+    return result;
+}
+
 // Get window count for an app
 CFIndex getAppWindowCount(pid_t pid) {
     AXUIElementRef app = AXUIElementCreateApplication(pid);
@@ -307,4 +323,10 @@ func ResizeWindow(pid int, windowIndex int, width, height int) error {
 // GetAppWindowCount returns the number of windows for an application.
 func GetAppWindowCount(pid int) int {
 	return int(C.getAppWindowCount(C.pid_t(pid)))
+}
+
+// IsFrontmostApp returns true if the application with the given PID is
+// the frontmost (active) application.
+func IsFrontmostApp(pid int) bool {
+	return C.isAppFrontmost(C.pid_t(pid)) != 0
 }

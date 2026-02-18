@@ -12,6 +12,7 @@ type WindowInfo struct {
 	Height    int    // Window height
 	OnScreen  bool   // Whether window is currently on screen
 	Layer     int    // Window layer (0 = normal windows)
+	Focused   bool   // Whether the owning app is the frontmost application
 }
 
 // ListWindows returns all visible windows on the system.
