@@ -11,6 +11,7 @@ import (
 
 	"github.com/sstraus/mcpmaccontrol/internal/capture"
 	"github.com/sstraus/mcpmaccontrol/internal/input"
+	"github.com/sstraus/mcpmaccontrol/internal/notify"
 	"github.com/sstraus/mcpmaccontrol/internal/permissions"
 )
 
@@ -567,6 +568,12 @@ func executeAction(index int, action Action) ActionResult {
 	result := ActionResult{
 		Index: index,
 		Type:  action.Type,
+	}
+
+	// Notify user before screen-affecting actions
+	switch strings.ToLower(action.Type) {
+	case "click", "move", "type", "key", "paste", "scroll", "drag":
+		notify.BeforeAction()
 	}
 
 	switch strings.ToLower(action.Type) {

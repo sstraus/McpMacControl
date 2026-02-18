@@ -17,6 +17,7 @@ import (
 
 	"github.com/sstraus/mcpmaccontrol/internal/agent"
 	"github.com/sstraus/mcpmaccontrol/internal/bridge"
+	"github.com/sstraus/mcpmaccontrol/internal/notify"
 	"github.com/sstraus/mcpmaccontrol/internal/permissions"
 	"github.com/sstraus/mcpmaccontrol/internal/shell"
 	"github.com/sstraus/mcpmaccontrol/internal/tools"
@@ -91,6 +92,10 @@ func onReady() {
 
 	systray.AddSeparator()
 
+	notifyItem := systray.AddMenuItemCheckbox("Notify on Actions", "Sound + visual flash before automation", notify.IsEnabled())
+
+	systray.AddSeparator()
+
 	permItem := systray.AddMenuItem("Check Permissions...", "Open System Settings")
 
 	systray.AddSeparator()
@@ -101,6 +106,14 @@ func onReady() {
 	go func() {
 		for {
 			select {
+			case <-notifyItem.ClickedCh:
+				if notifyItem.Checked() {
+					notifyItem.Uncheck()
+					notify.SetEnabled(false)
+				} else {
+					notifyItem.Check()
+					notify.SetEnabled(true)
+				}
 			case <-permItem.ClickedCh:
 				perms := permissions.CheckAllPermissions()
 				if !perms.Accessibility || !perms.ScreenRecording {

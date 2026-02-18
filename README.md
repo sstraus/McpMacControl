@@ -69,6 +69,7 @@ Grant both in **System Settings > Privacy & Security**. The app registers itself
 ## Features
 
 - **Menu bar icon** shows when MCP server is running
+- **Action notifications** — sound + orange border flash before mouse/keyboard automation, so you know when the AI is controlling your Mac. Toggle from the menu bar
 - **Single binary** in a signed `.app` bundle
 - **Auto-exit** when Claude disconnects
 - **Region capture** to save tokens

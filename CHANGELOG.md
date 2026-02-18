@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **Action notifications** — plays a "Tink" sound and flashes an orange border overlay on all displays before mouse, keyboard, scroll, and drag actions so the user knows automation is happening
+- **Menu bar toggle** — "Notify on Actions" checkbox in the systray context menu to enable/disable notifications (enabled by default)
+
 ## 1.0.0
 
 Initial release.
