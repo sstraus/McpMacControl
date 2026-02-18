@@ -70,7 +70,10 @@ type Action struct {
 }
 
 // normalizeAction converts aliases to canonical field names.
-func normalizeAction(action *Action) {
+// Returns the original type before normalization (empty if unchanged).
+func normalizeAction(action *Action) (originalType string) {
+	rawType := action.Type
+
 	// mouse_move → move, mouse_click → click, etc.
 	if strings.HasPrefix(strings.ToLower(action.Type), "mouse_") {
 		action.Type = strings.TrimPrefix(strings.ToLower(action.Type), "mouse_")
@@ -79,6 +82,11 @@ func normalizeAction(action *Action) {
 	if strings.EqualFold(action.Type, "hover") {
 		action.Type = "move"
 	}
+
+	if !strings.EqualFold(rawType, action.Type) {
+		originalType = rawType
+	}
+
 	// app_name → app
 	if action.App == "" && action.AppName != "" {
 		action.App = action.AppName
@@ -93,6 +101,7 @@ func normalizeAction(action *Action) {
 		action.Key = parts[len(parts)-1]
 		action.Modifiers = append(parts[:len(parts)-1], action.Modifiers...)
 	}
+	return originalType
 }
 
 // ActionResult represents the result of a single action.
@@ -150,9 +159,10 @@ func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 		return mcp.NewToolResultError(formatEmptyActionsError()), nil
 	}
 
-	// Normalize aliases (app_name → app, duration → ms)
+	// Normalize aliases (app_name → app, duration → ms) and track originals
+	originalTypes := make([]string, len(actions))
 	for i := range actions {
-		normalizeAction(&actions[i])
+		originalTypes[i] = normalizeAction(&actions[i])
 	}
 
 	// Validate all actions first (fail fast with helpful errors)
@@ -172,6 +182,10 @@ func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 	results := make([]ActionResult, 0, len(actions))
 	for i, action := range actions {
 		result := executeAction(i, action)
+		// Annotate result when an alias was used
+		if originalTypes[i] != "" && result.Success {
+			result.Message += fmt.Sprintf(" (note: use \"%s\" instead of \"%s\")", action.Type, originalTypes[i])
+		}
 		results = append(results, result)
 
 		// Stop on first error

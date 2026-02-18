@@ -44,7 +44,7 @@ MOUSE ACTIONS:
 │   {type:"click", app:"AppName", x:100, y:50}               │
 │   Optional: button:"right"|"middle", double:true            │
 ├─────────────────────────────────────────────────────────────┤
-│ move - Move mouse to position in window (alias: hover)      │
+│ move - Move mouse to position in window                     │
 │   {type:"move", app:"AppName", x:100, y:50}                │
 ├─────────────────────────────────────────────────────────────┤
 │ drag - Drag from one position to another in window          │
