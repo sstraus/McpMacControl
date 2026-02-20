@@ -50,13 +50,26 @@ func windowOverlapsDisplay(w *capture.WindowInfo, displays []capture.DisplayBoun
 	return false
 }
 
-// windowOrigin returns the top-left screen coordinates of the best matching
-// window for appName. It uses a two-pass match (owner name first, then window
-// title) and prefers windows whose bounds overlap an active display.
-func windowOrigin(appName string) (x, y int, err error) {
+// windowRect holds position and size of a window.
+type windowRect struct {
+	x, y, width, height int
+}
+
+// checkWindowBounds validates that relative coordinates fall within the window.
+func checkWindowBounds(w windowRect, relX, relY int) error {
+	if relX < 0 || relX >= w.width || relY < 0 || relY >= w.height {
+		return fmt.Errorf("coordinates (%d,%d) are outside window bounds (0,0)–(%d,%d)", relX, relY, w.width-1, w.height-1)
+	}
+	return nil
+}
+
+// findWindow returns the position and size of the best matching window for
+// appName. It uses a two-pass match (owner name first, then window title) and
+// prefers windows whose bounds overlap an active display.
+func findWindow(appName string) (windowRect, error) {
 	windows, err := capture.ListWindows(appName)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to list windows: %w", err)
+		return windowRect{}, fmt.Errorf("failed to list windows: %w", err)
 	}
 
 	appNameLower := strings.ToLower(appName)
@@ -81,32 +94,36 @@ func windowOrigin(appName string) (x, y int, err error) {
 	}
 
 	if len(matches) == 0 {
-		return 0, 0, fmt.Errorf("window not found for app: %s", appName)
+		return windowRect{}, fmt.Errorf("window not found for app: %s", appName)
+	}
+
+	toRect := func(w *capture.WindowInfo) windowRect {
+		return windowRect{x: w.X, y: w.Y, width: w.Width, height: w.Height}
 	}
 
 	// Prefer a window that overlaps an active display.
 	for i := range matches {
 		if windowOverlapsDisplay(&matches[i], displays) {
-			return matches[i].X, matches[i].Y, nil
+			return toRect(&matches[i]), nil
 		}
 	}
 
 	// Fall back to first match if none overlap a display.
-	return matches[0].X, matches[0].Y, nil
+	return toRect(&matches[0]), nil
 }
 
 // MoveMouseToWindow moves the mouse to a position relative to a window.
 // Returns the absolute screen coordinates used.
 func MoveMouseToWindow(appName string, relX, relY int) (absX, absY int, err error) {
-	ox, oy, err := windowOrigin(appName)
+	w, err := findWindow(appName)
 	if err != nil {
 		return 0, 0, fmt.Errorf("move mouse: %w", err)
 	}
-
-	absX, absY = ox+relX, oy+relY
-	if !isOnDisplay(absX, absY) {
-		return 0, 0, fmt.Errorf("target coordinates (%d,%d) are outside all displays — window may be off-screen", absX, absY)
+	if err := checkWindowBounds(w, relX, relY); err != nil {
+		return 0, 0, fmt.Errorf("move mouse: %w", err)
 	}
+
+	absX, absY = w.x+relX, w.y+relY
 	MoveMouse(absX, absY)
 	return absX, absY, nil
 }
@@ -114,15 +131,15 @@ func MoveMouseToWindow(appName string, relX, relY int) (absX, absY int, err erro
 // ClickInWindow clicks at a position relative to a window.
 // Returns the absolute screen coordinates used.
 func ClickInWindow(appName string, relX, relY int, button MouseButton, doubleClick bool) (absX, absY int, err error) {
-	ox, oy, err := windowOrigin(appName)
+	w, err := findWindow(appName)
 	if err != nil {
 		return 0, 0, fmt.Errorf("click: %w", err)
 	}
-
-	absX, absY = ox+relX, oy+relY
-	if !isOnDisplay(absX, absY) {
-		return 0, 0, fmt.Errorf("target coordinates (%d,%d) are outside all displays — window may be off-screen", absX, absY)
+	if err := checkWindowBounds(w, relX, relY); err != nil {
+		return 0, 0, fmt.Errorf("click: %w", err)
 	}
+
+	absX, absY = w.x+relX, w.y+relY
 	ClickMouse(absX, absY, int(button), doubleClick)
 	return absX, absY, nil
 }
@@ -130,19 +147,19 @@ func ClickInWindow(appName string, relX, relY int, button MouseButton, doubleCli
 // DragInWindow performs a drag from one window-relative position to another.
 // Returns the absolute screen coordinates of both endpoints.
 func DragInWindow(appName string, fromRelX, fromRelY, toRelX, toRelY int) (fromAbsX, fromAbsY, toAbsX, toAbsY int, err error) {
-	ox, oy, err := windowOrigin(appName)
+	w, err := findWindow(appName)
 	if err != nil {
 		return 0, 0, 0, 0, fmt.Errorf("drag: %w", err)
 	}
+	if err := checkWindowBounds(w, fromRelX, fromRelY); err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("drag start: %w", err)
+	}
+	if err := checkWindowBounds(w, toRelX, toRelY); err != nil {
+		return 0, 0, 0, 0, fmt.Errorf("drag end: %w", err)
+	}
 
-	fromAbsX, fromAbsY = ox+fromRelX, oy+fromRelY
-	toAbsX, toAbsY = ox+toRelX, oy+toRelY
-	if !isOnDisplay(fromAbsX, fromAbsY) {
-		return 0, 0, 0, 0, fmt.Errorf("drag start coordinates (%d,%d) are outside all displays — window may be off-screen", fromAbsX, fromAbsY)
-	}
-	if !isOnDisplay(toAbsX, toAbsY) {
-		return 0, 0, 0, 0, fmt.Errorf("drag end coordinates (%d,%d) are outside all displays — window may be off-screen", toAbsX, toAbsY)
-	}
+	fromAbsX, fromAbsY = w.x+fromRelX, w.y+fromRelY
+	toAbsX, toAbsY = w.x+toRelX, w.y+toRelY
 	DragMouse(fromAbsX, fromAbsY, toAbsX, toAbsY)
 	return fromAbsX, fromAbsY, toAbsX, toAbsY, nil
 }

@@ -37,6 +37,39 @@ func TestIsOnDisplay(t *testing.T) {
 	assert.False(t, isOnDisplay(-99999, -99999), "point far off-screen should not be on any display")
 }
 
+func TestCheckWindowBounds(t *testing.T) {
+	wb := windowRect{x: 100, y: 200, width: 800, height: 600}
+
+	tests := []struct {
+		name   string
+		relX   int
+		relY   int
+		hasErr bool
+	}{
+		{"inside", 400, 300, false},
+		{"origin", 0, 0, false},
+		{"bottom-right edge", 799, 599, false},
+		{"x at width", 800, 300, true},
+		{"y at height", 400, 600, true},
+		{"x beyond width", 900, 300, true},
+		{"y beyond height", 400, 700, true},
+		{"negative x", -1, 300, true},
+		{"negative y", 400, -1, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := checkWindowBounds(wb, tt.relX, tt.relY)
+			if tt.hasErr {
+				assert.Error(t, err, "expected error for out-of-bounds")
+				assert.Contains(t, err.Error(), "outside window")
+			} else {
+				assert.NoError(t, err, "expected no error for in-bounds")
+			}
+		})
+	}
+}
+
 func TestWindowOverlapsDisplay(t *testing.T) {
 	displays := []capture.DisplayBounds{
 		{X: 0, Y: 0, Width: 1920, Height: 1080},
