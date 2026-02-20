@@ -7,12 +7,37 @@ package input
 
 #include <ApplicationServices/ApplicationServices.h>
 
-// Move mouse to position
+// Move mouse to position with interpolation so context menus track correctly.
 void moveMouse(int x, int y) {
-    CGPoint point = CGPointMake(x, y);
-    CGEventRef event = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, point, kCGMouseButtonLeft);
-    CGEventPost(kCGHIDEventTap, event);
-    CFRelease(event);
+    // Get current position for interpolation
+    CGEventRef posEvent = CGEventCreate(NULL);
+    CGPoint from = CGEventGetLocation(posEvent);
+    CFRelease(posEvent);
+
+    CGPoint to = CGPointMake(x, y);
+
+    double dx = to.x - from.x;
+    double dy = to.y - from.y;
+    double dist = sqrt(dx*dx + dy*dy);
+
+    // Short distance: single event (avoid overhead for tiny moves)
+    if (dist < 10.0) {
+        CGEventRef event = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, to, kCGMouseButtonLeft);
+        CGEventPost(kCGHIDEventTap, event);
+        CFRelease(event);
+        return;
+    }
+
+    // Interpolate for smooth movement
+    int steps = 10;
+    for (int i = 1; i <= steps; i++) {
+        double t = (double)i / steps;
+        CGPoint p = CGPointMake(from.x + t * dx, from.y + t * dy);
+        CGEventRef event = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, p, kCGMouseButtonLeft);
+        CGEventPost(kCGHIDEventTap, event);
+        CFRelease(event);
+        if (i < steps) usleep(5000); // 5ms between steps
+    }
 }
 
 // Click at position

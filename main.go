@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/getlantern/systray"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/sstraus/mcpmaccontrol/internal/agent"
@@ -159,6 +160,11 @@ func onReady() {
 		// MCP server exited (idle timeout or signal)
 		close(quitCh)
 		systray.Quit()
+
+		// Safety net: if systray.Quit() doesn't terminate the process
+		// (e.g., NSApp event loop doesn't process the quit message),
+		// force exit after a grace period.
+		time.AfterFunc(2*time.Second, func() { os.Exit(0) })
 	}()
 }
 
@@ -208,10 +214,21 @@ func runMCPServer(listener net.Listener) {
 		statusItem.SetTitle("Status: Running")
 	}
 
+	hooks := &server.Hooks{}
+	if statusItem != nil {
+		hooks.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest) {
+			systray.SetTitle(msg.Params.Name)
+		})
+		hooks.AddAfterCallTool(func(_ context.Context, _ any, _ *mcp.CallToolRequest, _ *mcp.CallToolResult) {
+			systray.SetTitle("")
+		})
+	}
+
 	mcpServer = server.NewMCPServer(
 		"mcpmaccontrol",
 		"1.0.0",
 		server.WithToolCapabilities(true),
+		server.WithHooks(hooks),
 	)
 
 	// Register Mac control tools
