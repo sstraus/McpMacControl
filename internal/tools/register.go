@@ -86,6 +86,15 @@ func allTools() []toolDef {
 			HandleDo,
 		},
 		{
+			mcp.NewTool("alert",
+				mcp.WithDescription("Visual alert overlay. Red flash when active=true (needs user attention), green flash when active=false (done)."),
+				mcp.WithBoolean("active",
+					mcp.Description("true = start red flashing border, false = stop and show green confirmation"),
+				),
+			),
+			HandleAlert,
+		},
+		{
 			mcp.NewTool("processes",
 				mcp.WithDescription("List running processes with PID, CPU, memory, state. Filter by name or PID. Includes child processes."),
 				mcp.WithString("name",

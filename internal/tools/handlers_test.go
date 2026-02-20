@@ -212,6 +212,45 @@ func TestHandleDo_WaitAction(t *testing.T) {
 
 // --- Shell tool (consolidated) tests ---
 
+// --- Alert tool tests ---
+
+func TestHandleAlert_ActivateWarn(t *testing.T) {
+	req := mockRequest(map[string]any{"active": true})
+
+	result, err := HandleAlert(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.IsError)
+	text := result.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text, "activated")
+}
+
+func TestHandleAlert_DeactivateWarn(t *testing.T) {
+	req := mockRequest(map[string]any{"active": false})
+
+	result, err := HandleAlert(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.IsError)
+	text := result.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text, "deactivated")
+}
+
+func TestHandleAlert_MissingParam(t *testing.T) {
+	req := mockRequest(map[string]any{})
+
+	result, err := HandleAlert(context.Background(), req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	// Default is false (deactivate) — should still succeed
+	assert.False(t, result.IsError)
+}
+
+// --- Shell tool (consolidated) tests ---
+
 func TestHandleShell_MissingAction(t *testing.T) {
 	req := mockRequest(map[string]any{})
 

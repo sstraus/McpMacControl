@@ -16,6 +16,7 @@ TOOLS:
 • capture_screen → Full screen screenshot
 • do             → Execute actions (click, type, paste, key, drag, scroll, wait, focus, etc.)
 • shell          → PTY shell sessions with terminal emulation (spawn, send_input, get_snapshot, resize, close, list)
+• alert          → Visual alert overlay (red flash = needs attention, green = done)
 • processes       → List running processes with filtering for debugging
 
 WORKFLOW:
