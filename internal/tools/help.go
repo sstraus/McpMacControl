@@ -41,12 +41,14 @@ do({"actions": [...]})
 
 MOUSE ACTIONS:
 ┌─────────────────────────────────────────────────────────────┐
-│ click - Click at position in window                         │
+│ click - Click at position (window-relative or absolute)      │
 │   {type:"click", app:"AppName", x:100, y:50}               │
+│   {type:"click", x:500, y:300}  ← absolute (no app)        │
 │   Optional: button:"right"|"middle", double:true            │
 ├─────────────────────────────────────────────────────────────┤
-│ move - Move mouse to position in window                     │
+│ move - Move mouse (window-relative or absolute)              │
 │   {type:"move", app:"AppName", x:100, y:50}                │
+│   {type:"move", x:500, y:300}   ← absolute (no app)        │
 ├─────────────────────────────────────────────────────────────┤
 │ drag - Drag from one position to another in window          │
 │   {type:"drag", app:"Finder", x:100, y:100,                │
@@ -282,18 +284,20 @@ USE CASES:
 var actionHelp = map[string]string{
 	"click": `CLICK ACTION
 
-Click at position relative to window top-left.
+Click at position relative to window top-left, or at absolute screen coordinates.
 IMPORTANT: Always target the CENTER of the element, not its edge.
 Estimate the element's bounding box and use its midpoint.
 
 Format:
   {"type": "click", "app": "AppName", "x": 100, "y": 50}
+  {"type": "click", "x": 500, "y": 300}   ← absolute screen coords (no app)
 
 Required:
   • type: "click"
-  • app: Application name (case-insensitive)
-  • x: X coordinate from window top-left (center of target element)
-  • y: Y coordinate from window top-left (center of target element)
+  • x, y: Coordinates (window-relative if app given, absolute screen if not)
+
+Optional:
+  • app: Application name — when provided, x/y are relative to window top-left
 
 Optional:
   • button: "left" (default), "right", "middle"
@@ -306,19 +310,22 @@ Examples:
 
 	"move": `MOVE ACTION
 
-Move mouse cursor to position relative to window.
+Move mouse cursor to position relative to window, or to absolute screen coordinates.
 
 Format:
   {"type": "move", "app": "AppName", "x": 100, "y": 50}
+  {"type": "move", "x": 500, "y": 300}   ← absolute screen coords (no app)
 
 Required:
   • type: "move"
-  • app: Application name
-  • x: X coordinate from window top-left
-  • y: Y coordinate from window top-left
+  • x, y: Coordinates (window-relative if app given, absolute screen if not)
 
-Example:
-  {"type": "move", "app": "Safari", "x": 300, "y": 200}`,
+Optional:
+  • app: Application name — when provided, x/y are relative to window top-left
+
+Examples:
+  {"type": "move", "app": "Safari", "x": 300, "y": 200}
+  {"type": "move", "x": 960, "y": 540}`,
 
 	"type": `TYPE ACTION
 

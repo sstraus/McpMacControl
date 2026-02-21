@@ -28,8 +28,8 @@ func ParseMouseButton(s string) MouseButton {
 	}
 }
 
-// isOnDisplay returns true if the point (x, y) falls within any active display.
-func isOnDisplay(x, y int) bool {
+// IsOnDisplay returns true if the point (x, y) falls within any active display.
+func IsOnDisplay(x, y int) bool {
 	for _, d := range capture.ActiveDisplayBounds() {
 		if x >= d.X && x < d.X+d.Width && y >= d.Y && y < d.Y+d.Height {
 			return true

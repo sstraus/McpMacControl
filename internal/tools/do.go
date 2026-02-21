@@ -268,19 +268,7 @@ Example:
 }
 
 func validateMouseAction(index int, action Action, actionType string) error {
-	if action.App == "" {
-		return fmt.Errorf(`[Action %d] %s requires "app" field.
-
-The "app" field specifies which window to target.
-
-Correct format:
-  {"type": "%s", "app": "Safari", "x": 100, "y": 50}
-
-Your action:
-  {"type": "%s", "x": %d, "y": %d}  ← missing "app"
-
-Tip: Use list_windows() to find available app names.`, index, actionType, actionType, actionType, action.X, action.Y)
-	}
+	// app is optional: when omitted, x/y are absolute screen coordinates.
 
 	// Validate button if provided
 	if action.Button != "" {
@@ -633,17 +621,34 @@ func executeAction(index int, action Action) ActionResult {
 }
 
 func executeClick(index int, action Action) ActionResult {
-	if errResult := ensureWindowFocused(index, "click", action.App); errResult != nil {
-		return *errResult
-	}
 	button := input.ParseMouseButton(action.Button)
-	absX, absY, err := input.ClickInWindow(action.App, action.X, action.Y, button, action.Double)
-	if err != nil {
-		return ActionResult{
-			Index:   index,
-			Type:    "click",
-			Success: false,
-			Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
+
+	var absX, absY int
+	if action.App == "" {
+		// Absolute screen coordinates
+		absX, absY = action.X, action.Y
+		if !input.IsOnDisplay(absX, absY) {
+			return ActionResult{
+				Index:   index,
+				Type:    "click",
+				Success: false,
+				Error:   fmt.Sprintf("coordinates (%d,%d) are outside all displays", absX, absY),
+			}
+		}
+		input.ClickMouse(absX, absY, int(button), action.Double)
+	} else {
+		if errResult := ensureWindowFocused(index, "click", action.App); errResult != nil {
+			return *errResult
+		}
+		var err error
+		absX, absY, err = input.ClickInWindow(action.App, action.X, action.Y, button, action.Double)
+		if err != nil {
+			return ActionResult{
+				Index:   index,
+				Type:    "click",
+				Success: false,
+				Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
+			}
 		}
 	}
 
@@ -655,33 +660,59 @@ func executeClick(index int, action Action) ActionResult {
 		clickType = "right-" + clickType
 	}
 
+	target := action.App
+	if target == "" {
+		target = "screen"
+	}
+
 	return ActionResult{
 		Index:   index,
 		Type:    "click",
 		Success: true,
-		Message: fmt.Sprintf("%s at (%d,%d) in %s (screen: %d,%d)", clickType, action.X, action.Y, action.App, absX, absY),
+		Message: fmt.Sprintf("%s at (%d,%d) in %s (screen: %d,%d)", clickType, action.X, action.Y, target, absX, absY),
 	}
 }
 
 func executeMove(index int, action Action) ActionResult {
-	if errResult := ensureWindowFocused(index, "move", action.App); errResult != nil {
-		return *errResult
-	}
-	absX, absY, err := input.MoveMouseToWindow(action.App, action.X, action.Y)
-	if err != nil {
-		return ActionResult{
-			Index:   index,
-			Type:    "move",
-			Success: false,
-			Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
+	var absX, absY int
+	if action.App == "" {
+		// Absolute screen coordinates
+		absX, absY = action.X, action.Y
+		if !input.IsOnDisplay(absX, absY) {
+			return ActionResult{
+				Index:   index,
+				Type:    "move",
+				Success: false,
+				Error:   fmt.Sprintf("coordinates (%d,%d) are outside all displays", absX, absY),
+			}
 		}
+		input.MoveMouse(absX, absY)
+	} else {
+		if errResult := ensureWindowFocused(index, "move", action.App); errResult != nil {
+			return *errResult
+		}
+		var err error
+		absX, absY, err = input.MoveMouseToWindow(action.App, action.X, action.Y)
+		if err != nil {
+			return ActionResult{
+				Index:   index,
+				Type:    "move",
+				Success: false,
+				Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
+			}
+		}
+	}
+
+	target := action.App
+	if target == "" {
+		target = "screen"
 	}
 
 	return ActionResult{
 		Index:   index,
 		Type:    "move",
 		Success: true,
-		Message: fmt.Sprintf("moved to (%d,%d) in %s (screen: %d,%d)", action.X, action.Y, action.App, absX, absY),
+		Message: fmt.Sprintf("moved to (%d,%d) in %s (screen: %d,%d)", action.X, action.Y, target, absX, absY),
 	}
 }
 

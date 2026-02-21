@@ -41,18 +41,18 @@ func TestValidateAction_UnknownType(t *testing.T) {
 	}
 }
 
-func TestValidateAction_ClickMissingApp(t *testing.T) {
+func TestValidateAction_ClickWithoutApp(t *testing.T) {
+	// Click without app is valid — uses absolute screen coordinates.
 	action := Action{Type: "click", X: 100, Y: 50}
 	err := validateAction(0, action)
-	if err == nil {
-		t.Error("expected error for click without app")
-	}
-	if !strings.Contains(err.Error(), `requires "app" field`) {
-		t.Errorf("error should mention missing app, got: %s", err.Error())
-	}
-	if !strings.Contains(err.Error(), "list_windows()") {
-		t.Error("error should suggest list_windows()")
-	}
+	assert.NoError(t, err, "click without app should be valid (absolute coords)")
+}
+
+func TestValidateAction_MoveWithoutApp(t *testing.T) {
+	// Move without app is valid — uses absolute screen coordinates.
+	action := Action{Type: "move", X: 100, Y: 50}
+	err := validateAction(0, action)
+	assert.NoError(t, err, "move without app should be valid (absolute coords)")
 }
 
 func TestValidateAction_ClickInvalidButton(t *testing.T) {
@@ -91,15 +91,11 @@ func TestValidateAction_ClickValid(t *testing.T) {
 	}
 }
 
-func TestValidateAction_MoveMissingApp(t *testing.T) {
+func TestValidateAction_MoveWithoutApp_Duplicate(t *testing.T) {
+	// Move without app is valid — uses absolute screen coordinates.
 	action := Action{Type: "move", X: 100, Y: 50}
 	err := validateAction(0, action)
-	if err == nil {
-		t.Error("expected error for move without app")
-	}
-	if !strings.Contains(err.Error(), `requires "app" field`) {
-		t.Errorf("error should mention missing app, got: %s", err.Error())
-	}
+	assert.NoError(t, err, "move without app should be valid (absolute coords)")
 }
 
 func TestValidateAction_MoveValid(t *testing.T) {
@@ -408,9 +404,9 @@ func TestValidateAction_ActionIndex(t *testing.T) {
 		index  int
 		action Action
 	}{
-		{0, Action{Type: "click"}}, // missing app
-		{3, Action{Type: "click"}},
-		{10, Action{Type: "click"}},
+		{0, Action{Type: "click", Button: "invalid"}},  // invalid button
+		{3, Action{Type: "click", Button: "invalid"}},
+		{10, Action{Type: "click", Button: "invalid"}},
 	}
 
 	for _, tt := range tests {
@@ -834,6 +830,22 @@ func TestExecuteAction_WaitRoute(t *testing.T) {
 	result := executeAction(0, Action{Type: "wait", Ms: 10})
 	assert.True(t, result.Success)
 	assert.Equal(t, "wait", result.Type)
+}
+
+func TestExecuteClick_AbsoluteCoords(t *testing.T) {
+	skipWithoutAccessibility(t)
+	// Click at absolute screen coordinates (no app).
+	result := executeClick(0, Action{Type: "click", X: 400, Y: 400})
+	assert.True(t, result.Success)
+	assert.Contains(t, result.Message, "screen: 400,400")
+}
+
+func TestExecuteMove_AbsoluteCoords(t *testing.T) {
+	skipWithoutAccessibility(t)
+	// Move at absolute screen coordinates (no app).
+	result := executeMove(0, Action{Type: "move", X: 400, Y: 400})
+	assert.True(t, result.Success)
+	assert.Contains(t, result.Message, "screen: 400,400")
 }
 
 // --- executeClipboard test (no permissions needed) ---

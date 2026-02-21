@@ -31,10 +31,10 @@ func TestParseMouseButton(t *testing.T) {
 func TestIsOnDisplay(t *testing.T) {
 	// The machine running tests must have at least one display.
 	// Primary display starts at (0,0), so (10,10) should always be on-screen.
-	assert.True(t, isOnDisplay(10, 10), "point near origin should be on-screen")
+	assert.True(t, IsOnDisplay(10, 10), "point near origin should be on-screen")
 
 	// A point far off-screen should not be on any display.
-	assert.False(t, isOnDisplay(-99999, -99999), "point far off-screen should not be on any display")
+	assert.False(t, IsOnDisplay(-99999, -99999), "point far off-screen should not be on any display")
 }
 
 func TestCheckWindowBounds(t *testing.T) {

@@ -175,10 +175,10 @@ func TestHandleDo_InvalidActionFormat(t *testing.T) {
 
 func TestHandleDo_ValidationError(t *testing.T) {
 	skipWithoutAccessibility(t)
-	// Action with missing required field
+	// Action with invalid button
 	req := mockRequest(map[string]any{
 		"actions": []any{
-			map[string]any{"type": "click", "x": 100, "y": 100}, // missing app
+			map[string]any{"type": "click", "app": "Safari", "x": 100, "y": 100, "button": "invalid"},
 		},
 	})
 
@@ -188,7 +188,7 @@ func TestHandleDo_ValidationError(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.True(t, result.IsError)
 	text := result.Content[0].(mcp.TextContent).Text
-	assert.Contains(t, text, "app")
+	assert.Contains(t, text, "Invalid button")
 }
 
 func TestHandleDo_WaitAction(t *testing.T) {
