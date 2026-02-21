@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
+	"fmt"
+	"image"
+	"image/png"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -217,10 +222,19 @@ func runMCPServer(listener net.Listener) {
 	hooks := &server.Hooks{}
 	if statusItem != nil {
 		hooks.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest) {
-			systray.SetTitle(msg.Params.Name)
+			if isCaptureCall(msg.Params.Name) {
+				// Hide systray icon so it doesn't appear in screenshots
+				systray.SetTemplateIcon(transparentIcon(), transparentIcon())
+				time.Sleep(200 * time.Millisecond)
+			} else {
+				notify.ShowBalloon(describeTool(msg))
+			}
 		})
-		hooks.AddAfterCallTool(func(_ context.Context, _ any, _ *mcp.CallToolRequest, _ *mcp.CallToolResult) {
-			systray.SetTitle("")
+		hooks.AddAfterCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest, _ *mcp.CallToolResult) {
+			if isCaptureCall(msg.Params.Name) {
+				systray.SetTemplateIcon(iconData, iconData)
+			}
+			notify.HideBalloon()
 		})
 	}
 
@@ -303,6 +317,66 @@ func runMCPServer(listener net.Listener) {
 	if statusItem != nil {
 		statusItem.SetTitle("Status: Stopped")
 	}
+}
+
+// isCaptureCall returns true for screenshot tools whose balloon/icon would
+// pollute the captured image.
+func isCaptureCall(name string) bool {
+	return name == "capture_window" || name == "capture_screen"
+}
+
+// describeTool returns a short human-readable description of an MCP tool call
+// for the balloon notification.
+func describeTool(msg *mcp.CallToolRequest) string {
+	args := msg.GetArguments()
+	switch msg.Params.Name {
+	case "do":
+		if actions, ok := args["actions"].([]any); ok && len(actions) > 0 {
+			var types []string
+			for _, a := range actions {
+				if m, ok := a.(map[string]any); ok {
+					if t, ok := m["type"].(string); ok {
+						types = append(types, t)
+					}
+				}
+			}
+			if len(types) > 0 {
+				return fmt.Sprintf("do: %s", strings.Join(types, " → "))
+			}
+		}
+		return "do"
+	case "shell":
+		if action, ok := args["action"].(string); ok {
+			return fmt.Sprintf("shell: %s", action)
+		}
+		return "shell"
+	case "list_windows":
+		if filter, ok := args["app_filter"].(string); ok && filter != "" {
+			return fmt.Sprintf("list_windows: %s", filter)
+		}
+		return "list_windows"
+	case "processes":
+		if name, ok := args["name"].(string); ok && name != "" {
+			return fmt.Sprintf("processes: %s", name)
+		}
+		return "processes"
+	case "help":
+		if topic, ok := args["topic"].(string); ok && topic != "" {
+			return fmt.Sprintf("help: %s", topic)
+		}
+		return "help"
+	default:
+		return msg.Params.Name
+	}
+}
+
+// transparentIcon returns a 1x1 transparent PNG for temporarily hiding the
+// systray icon during screenshots.
+func transparentIcon() []byte {
+	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	return buf.Bytes()
 }
 
 // 22x22 template icon for macOS menu bar - monitor with capture dot

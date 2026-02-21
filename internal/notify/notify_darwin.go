@@ -4,15 +4,21 @@ package notify
 
 /*
 #cgo LDFLAGS: -framework Cocoa -framework CoreGraphics
+#include <stdlib.h>
 
 extern void playTinkSound(void);
 extern void showOverlay(void);
 extern void startWarnFlash(void);
 extern void stopWarnFlash(void);
+extern void showBalloon(const char* text);
+extern void hideBalloon(void);
 */
 import "C"
 
-import "time"
+import (
+	"time"
+	"unsafe"
+)
 
 // StartWarn activates a flashing red border overlay to alert the user.
 func StartWarn() {
@@ -22,6 +28,19 @@ func StartWarn() {
 // StopWarn stops the red flash and shows a brief green border.
 func StopWarn() {
 	C.stopWarnFlash()
+}
+
+// ShowBalloon displays a floating HUD near the menu bar with the given text.
+// Auto-dismisses after 3 seconds. Call HideBalloon to dismiss earlier.
+func ShowBalloon(text string) {
+	cstr := C.CString(text)
+	defer C.free(unsafe.Pointer(cstr))
+	C.showBalloon(cstr)
+}
+
+// HideBalloon hides the balloon notification immediately.
+func HideBalloon() {
+	C.hideBalloon()
 }
 
 // BeforeAction plays a sound and shows a visual overlay if notifications are enabled.

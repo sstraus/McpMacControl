@@ -115,6 +115,91 @@ void stopWarnFlash(void) {
     });
 }
 
+// --- Balloon notification (floating HUD near menu bar) ---
+
+static NSWindow *balloonWindow = nil;
+static NSTextField *balloonLabel = nil;
+static NSTimer *balloonTimer = nil;
+
+// showBalloon displays a dark floating HUD just below the menu bar on the
+// primary display. Auto-dismisses after 3 seconds. Calling again resets the
+// timer and updates the text.
+void showBalloon(const char* text) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *str = [NSString stringWithUTF8String:text];
+
+        if (!balloonWindow) {
+            NSScreen *screen = [NSScreen mainScreen];
+            CGFloat screenWidth = screen.frame.size.width;
+            CGFloat screenTop = NSMaxY(screen.visibleFrame);
+            CGFloat bw = 320;
+            CGFloat bh = 32;
+
+            NSRect frame = NSMakeRect(
+                screenWidth - bw - 8,   // right-aligned with margin
+                screenTop - bh - 4,     // just below menu bar
+                bw, bh
+            );
+
+            balloonWindow = [[NSWindow alloc]
+                initWithContentRect:frame
+                          styleMask:NSWindowStyleMaskBorderless
+                            backing:NSBackingStoreBuffered
+                              defer:NO];
+
+            [balloonWindow setLevel:NSStatusWindowLevel + 1];
+            [balloonWindow setOpaque:NO];
+            [balloonWindow setBackgroundColor:[NSColor colorWithWhite:0.12 alpha:0.92]];
+            [balloonWindow setIgnoresMouseEvents:YES];
+            [balloonWindow setHasShadow:YES];
+            [balloonWindow setCollectionBehavior:
+                NSWindowCollectionBehaviorCanJoinAllSpaces |
+                NSWindowCollectionBehaviorStationary];
+
+            [balloonWindow.contentView setWantsLayer:YES];
+            balloonWindow.contentView.layer.cornerRadius = 8.0;
+            balloonWindow.contentView.layer.masksToBounds = YES;
+
+            balloonLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 4, bw - 20, 24)];
+            [balloonLabel setBezeled:NO];
+            [balloonLabel setDrawsBackground:NO];
+            [balloonLabel setEditable:NO];
+            [balloonLabel setSelectable:NO];
+            [balloonLabel setTextColor:[NSColor whiteColor]];
+            [balloonLabel setFont:[NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightMedium]];
+            [balloonLabel setLineBreakMode:NSLineBreakByTruncatingTail];
+            [balloonWindow.contentView addSubview:balloonLabel];
+        }
+
+        [balloonLabel setStringValue:str];
+        [balloonWindow orderFrontRegardless];
+
+        // Reset auto-dismiss timer (3 seconds)
+        if (balloonTimer) {
+            [balloonTimer invalidate];
+        }
+        balloonTimer = [NSTimer scheduledTimerWithTimeInterval:3.0
+                                                       repeats:NO
+                                                         block:^(NSTimer *timer) {
+            [balloonWindow orderOut:nil];
+            balloonTimer = nil;
+        }];
+    });
+}
+
+// hideBalloon hides the balloon immediately.
+void hideBalloon(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (balloonTimer) {
+            [balloonTimer invalidate];
+            balloonTimer = nil;
+        }
+        if (balloonWindow) {
+            [balloonWindow orderOut:nil];
+        }
+    });
+}
+
 // showOverlay creates a borderless, click-through overlay window with an orange
 // border on every active display. Each overlay auto-dismisses after 800ms.
 void showOverlay(void) {
