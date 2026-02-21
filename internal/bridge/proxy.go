@@ -24,15 +24,17 @@ import (
 )
 
 const defaultCallTimeout = 30 * time.Second
+const defaultHandshakeTimeout = 5 * time.Second
 
 // lazyProxy manages the lifecycle of the .app backend and forwards tool calls.
 // The backend is launched on the first tool call and reused for subsequent calls.
 // If the backend dies, the proxy detects the transport error and reconnects.
 type lazyProxy struct {
-	appPath     string
-	sockPath    string
-	callTimeout time.Duration                       // timeout per tool call; 0 means defaultCallTimeout
-	launcher    func(appPath, sockPath string) error // injected for testing
+	appPath          string
+	sockPath         string
+	callTimeout      time.Duration                       // timeout per tool call; 0 means defaultCallTimeout
+	handshakeTimeout time.Duration                       // timeout for MCP handshake; 0 means defaultHandshakeTimeout
+	launcher         func(appPath, sockPath string) error // injected for testing
 
 	mu        sync.Mutex
 	connected bool
@@ -55,6 +57,14 @@ func (p *lazyProxy) getCallTimeout() time.Duration {
 		return p.callTimeout
 	}
 	return defaultCallTimeout
+}
+
+// getHandshakeTimeout returns the handshake timeout, defaulting to 5s.
+func (p *lazyProxy) getHandshakeTimeout() time.Duration {
+	if p.handshakeTimeout > 0 {
+		return p.handshakeTimeout
+	}
+	return defaultHandshakeTimeout
 }
 
 // callTool wraps client.CallTool with a timeout to prevent indefinite hangs.
@@ -194,14 +204,17 @@ func (p *lazyProxy) launchBackend(ctx context.Context) error {
 // handshake creates an MCP client over conn and performs the protocol
 // initialization. On success, it sets p.conn and p.client.
 func (p *lazyProxy) handshake(ctx context.Context, conn net.Conn) error {
+	hsCtx, cancel := context.WithTimeout(ctx, p.getHandshakeTimeout())
+	defer cancel()
+
 	t := transport.NewIO(conn, writeCloser{conn}, io.NopCloser(strings.NewReader("")))
 	c := client.NewClient(t)
 
-	if err := c.Start(ctx); err != nil {
+	if err := c.Start(hsCtx); err != nil {
 		return fmt.Errorf("start MCP client: %w", err)
 	}
 
-	if _, err := c.Initialize(ctx, mcp.InitializeRequest{
+	if _, err := c.Initialize(hsCtx, mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
 			ClientInfo: mcp.Implementation{

@@ -525,6 +525,65 @@ func TestLazyProxy_StaleSocketRecovery(t *testing.T) {
 	assert.Equal(t, "echo: after-stale", textContent.Text)
 }
 
+func TestLazyProxy_HandshakeTimeout(t *testing.T) {
+	// Create a listener that accepts connections but never sends anything,
+	// simulating a zombie backend that accepts but doesn't respond to MCP.
+	sockPath := filepath.Join("/tmp", "mcptest-"+t.Name()+".sock")
+	os.Remove(sockPath)
+	t.Cleanup(func() { os.Remove(sockPath) })
+
+	listener, err := net.Listen("unix", sockPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { listener.Close() })
+
+	// Accept connections but never write anything — simulates a hung backend.
+	var accepted atomic.Int32
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			// Hold the connection open but never respond.
+			go func() {
+				defer conn.Close()
+				<-time.After(30 * time.Second)
+			}()
+		}
+	}()
+
+	proxy := &lazyProxy{
+		appPath:          "/fake/app.app",
+		sockPath:         sockPath,
+		handshakeTimeout: 1 * time.Second,
+		launcher: func(_, _ string) error {
+			// After stale socket detection, fresh launch also fails.
+			return fmt.Errorf("app not available")
+		},
+	}
+	defer proxy.close()
+
+	start := time.Now()
+	result, err := proxy.handleToolCall(context.Background(), mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      "echo",
+			Arguments: map[string]any{"message": "timeout-test"},
+		},
+	})
+	elapsed := time.Since(start)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.IsError, "handshake timeout should return error result")
+	assert.Less(t, elapsed, 5*time.Second, "should complete near the 1s handshake timeout, not hang")
+	assert.GreaterOrEqual(t, accepted.Load(), int32(1), "backend should have accepted at least one connection")
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	assert.Contains(t, textContent.Text, "Backend startup failed")
+}
+
 func TestLazyProxy_Close_DoesNotRemoveSocket(t *testing.T) {
 	tmpDir := t.TempDir()
 	sockPath := filepath.Join(tmpDir, "cleanup-test.sock")
