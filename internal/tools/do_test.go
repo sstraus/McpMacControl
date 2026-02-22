@@ -91,12 +91,6 @@ func TestValidateAction_ClickValid(t *testing.T) {
 	}
 }
 
-func TestValidateAction_MoveWithoutApp_Duplicate(t *testing.T) {
-	// Move without app is valid — uses absolute screen coordinates.
-	action := Action{Type: "move", X: 100, Y: 50}
-	err := validateAction(0, action)
-	assert.NoError(t, err, "move without app should be valid (absolute coords)")
-}
 
 func TestValidateAction_MoveValid(t *testing.T) {
 	action := Action{Type: "move", App: "Safari", X: 300, Y: 200}
@@ -237,23 +231,22 @@ func TestValidateAction_KeyValid(t *testing.T) {
 func TestValidateAction_WaitZeroMs(t *testing.T) {
 	action := Action{Type: "wait", Ms: 0}
 	err := validateAction(0, action)
-	if err == nil {
-		t.Error("expected error for wait with 0 ms")
-	}
-	if !strings.Contains(err.Error(), `requires positive "ms" value`) {
-		t.Errorf("error should mention positive ms, got: %s", err.Error())
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "between 1 and")
 }
 
 func TestValidateAction_WaitNegativeMs(t *testing.T) {
 	action := Action{Type: "wait", Ms: -100}
 	err := validateAction(0, action)
-	if err == nil {
-		t.Error("expected error for wait with negative ms")
-	}
-	if !strings.Contains(err.Error(), "must be positive") {
-		t.Errorf("error should mention positive, got: %s", err.Error())
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "between 1 and")
+}
+
+func TestValidateAction_WaitExceedsMax(t *testing.T) {
+	action := Action{Type: "wait", Ms: maxWaitMs + 1}
+	err := validateAction(0, action)
+	assert.Error(t, err, "wait exceeding maxWaitMs should be rejected")
+	assert.Contains(t, err.Error(), "between 1 and")
 }
 
 func TestValidateAction_WaitValid(t *testing.T) {
@@ -846,6 +839,19 @@ func TestExecuteMove_AbsoluteCoords(t *testing.T) {
 	result := executeMove(0, Action{Type: "move", X: 400, Y: 400})
 	assert.True(t, result.Success)
 	assert.Contains(t, result.Message, "screen: 400,400")
+}
+
+func TestExecuteClick_OffScreenCoords(t *testing.T) {
+	// Off-screen coordinates should be rejected without needing accessibility.
+	result := executeClick(0, Action{Type: "click", X: -99999, Y: -99999})
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Error, "outside all displays")
+}
+
+func TestExecuteMove_OffScreenCoords(t *testing.T) {
+	result := executeMove(0, Action{Type: "move", X: -99999, Y: -99999})
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Error, "outside all displays")
 }
 
 // --- executeClipboard test (no permissions needed) ---

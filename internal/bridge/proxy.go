@@ -175,11 +175,11 @@ func (p *lazyProxy) launchBackend(ctx context.Context) error {
 	conn, err := net.DialTimeout("unix", p.sockPath, 500*time.Millisecond)
 	if err == nil {
 		log.Printf("Reusing existing backend at %s", p.sockPath)
-		if err := p.handshake(ctx, conn); err == nil {
+		if hsErr := p.handshake(ctx, conn); hsErr == nil {
 			return nil
+		} else {
+			log.Printf("Stale socket detected (%v), removing %s and launching fresh backend", hsErr, p.sockPath)
 		}
-		// Handshake failed — stale socket from a dead backend.
-		log.Printf("Stale socket detected, removing %s and launching fresh backend", p.sockPath)
 		conn.Close()
 		os.Remove(p.sockPath)
 	}

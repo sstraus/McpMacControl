@@ -118,6 +118,9 @@ func handleShellSendInput(request mcp.CallToolRequest) (*mcp.CallToolResult, err
 	input := request.GetString("input", "")
 	specialKey := request.GetString("special_key", "")
 	waitMs := request.GetInt("wait_ms", 100)
+	if waitMs > maxWaitMs {
+		waitMs = maxWaitMs
+	}
 
 	if input != "" {
 		if err := session.SendInput(input); err != nil {
@@ -168,6 +171,9 @@ func handleShellGetSnapshot(request mcp.CallToolRequest) (*mcp.CallToolResult, e
 
 	// Wait before taking snapshot if requested
 	waitMs := request.GetInt("wait_ms", 0)
+	if waitMs > maxWaitMs {
+		waitMs = maxWaitMs
+	}
 	if waitMs > 0 {
 		time.Sleep(time.Duration(waitMs) * time.Millisecond)
 	}

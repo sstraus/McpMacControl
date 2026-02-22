@@ -99,7 +99,7 @@ func normalizeAction(action *Action) (originalType string) {
 	if strings.Contains(action.Key, "+") {
 		parts := strings.Split(action.Key, "+")
 		action.Key = parts[len(parts)-1]
-		action.Modifiers = append(parts[:len(parts)-1], action.Modifiers...)
+		action.Modifiers = append(parts[:len(parts)-1:len(parts)-1], action.Modifiers...)
 	}
 	return originalType
 }
@@ -385,9 +385,11 @@ Examples:
 	return nil
 }
 
+const maxWaitMs = 30_000 // 30 seconds — prevents unbounded goroutine blocking
+
 func validateWaitAction(index int, action Action) error {
-	if action.Ms <= 0 {
-		return fmt.Errorf(`[Action %d] wait action requires positive "ms" value.
+	if action.Ms <= 0 || action.Ms > maxWaitMs {
+		return fmt.Errorf(`[Action %d] wait action requires "ms" between 1 and %d.
 
 The "ms" field specifies milliseconds to wait.
 
@@ -395,12 +397,12 @@ Correct format:
   {"type": "wait", "ms": 500}
 
 Your action:
-  {"type": "wait", "ms": %d}  ← must be positive
+  {"type": "wait", "ms": %d}
 
 Examples:
   {"type": "wait", "ms": 100}   ← 100ms
   {"type": "wait", "ms": 1000}  ← 1 second
-  {"type": "wait", "ms": 5000}  ← 5 seconds`, index, action.Ms)
+  {"type": "wait", "ms": 5000}  ← 5 seconds`, index, maxWaitMs, action.Ms)
 	}
 	return nil
 }

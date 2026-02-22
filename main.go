@@ -146,16 +146,22 @@ func onReady() {
 	go func() {
 		sockPath := bridge.SocketPath
 
-		// Stale socket detection: if another instance is alive, exit.
+		// Stale socket detection: if another instance is alive, shut down gracefully.
 		if conn, err := net.DialTimeout("unix", sockPath, 500*time.Millisecond); err == nil {
 			conn.Close()
-			log.Fatalf("Another instance is already listening on %s", sockPath)
+			log.Printf("Another instance is already listening on %s, shutting down", sockPath)
+			close(quitCh)
+			systray.Quit()
+			return
 		}
 		os.Remove(sockPath) // Remove stale socket from a crashed instance.
 
 		listener, err := net.Listen("unix", sockPath)
 		if err != nil {
-			log.Fatalf("Failed to listen on socket %s: %v", sockPath, err)
+			log.Printf("Failed to listen on socket %s: %v", sockPath, err)
+			close(quitCh)
+			systray.Quit()
+			return
 		}
 		defer listener.Close()
 		defer os.Remove(sockPath)
@@ -224,7 +230,7 @@ func runMCPServer(listener net.Listener) {
 		hooks.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest) {
 			if isCaptureCall(msg.Params.Name) {
 				// Hide systray icon so it doesn't appear in screenshots
-				systray.SetTemplateIcon(transparentIcon(), transparentIcon())
+				systray.SetTemplateIcon(transparentIconData, transparentIconData)
 				time.Sleep(200 * time.Millisecond)
 			} else {
 				notify.ShowBalloon(describeTool(msg))
@@ -370,14 +376,18 @@ func describeTool(msg *mcp.CallToolRequest) string {
 	}
 }
 
-// transparentIcon returns a 1x1 transparent PNG for temporarily hiding the
-// systray icon during screenshots.
-func transparentIcon() []byte {
+// transparentIconData is a 1x1 transparent PNG for temporarily hiding the
+// systray icon during screenshots. Pre-computed once at init.
+var transparentIconData = func() []byte {
 	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
 	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
+	if err := png.Encode(&buf, img); err != nil {
+		// Infallible for a 1x1 in-memory NRGBA image; log and return icon as fallback.
+		log.Printf("transparentIcon: png.Encode failed: %v", err)
+		return iconData
+	}
 	return buf.Bytes()
-}
+}()
 
 // 22x22 template icon for macOS menu bar - monitor with capture dot
 var iconData = []byte{

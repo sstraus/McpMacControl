@@ -2,6 +2,7 @@ package input
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/sstraus/mcpmaccontrol/internal/capture"
@@ -109,6 +110,7 @@ func findWindow(appName string) (windowRect, error) {
 	}
 
 	// Fall back to first match if none overlap a display.
+	log.Printf("findWindow: no window for %q overlaps an active display; using off-screen window at (%d,%d)", appName, matches[0].X, matches[0].Y)
 	return toRect(&matches[0]), nil
 }
 
