@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
-	"image"
-	"image/png"
 	"log"
 	"net"
 	"os"
@@ -229,29 +226,50 @@ func runMCPServer(listener net.Listener) {
 
 	hooks := &server.Hooks{}
 	if statusItem != nil {
-		hooks.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest) {
+		// Cache the project label from the client's roots on first use.
+		var projectLabel atomic.Value
+
+		getProjectLabel := func(ctx context.Context) string {
+			if v := projectLabel.Load(); v != nil {
+				return v.(string)
+			}
+			label := resolveProjectLabel(ctx)
+			projectLabel.Store(label)
+			return label
+		}
+
+		balloonText := func(ctx context.Context, msg *mcp.CallToolRequest) string {
+			project := getProjectLabel(ctx)
+			tool := describeTool(msg)
+			if project != "" {
+				return project + "\n" + tool
+			}
+			return tool
+		}
+
+		hooks.AddBeforeCallTool(func(ctx context.Context, _ any, msg *mcp.CallToolRequest) {
 			if debug {
 				log.Printf("[DEBUG] BeforeCallTool tool=%s start", msg.Params.Name)
 			}
-			if isCaptureCall(msg.Params.Name) {
-				// Hide systray icon so it doesn't appear in screenshots
-				systray.SetTemplateIcon(transparentIconData, transparentIconData)
-				time.Sleep(200 * time.Millisecond)
-			} else {
-				notify.ShowBalloon(describeTool(msg))
+			// Skip popover before screenshot tools so it doesn't appear in the capture.
+			// It will show after the shot instead (in AfterCallTool).
+			if !isCaptureCall(msg.Params.Name) {
+				notify.ShowBalloon(balloonText(ctx, msg))
 			}
 			if debug {
 				log.Printf("[DEBUG] BeforeCallTool tool=%s done", msg.Params.Name)
 			}
 		})
-		hooks.AddAfterCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest, _ *mcp.CallToolResult) {
+		hooks.AddAfterCallTool(func(ctx context.Context, _ any, msg *mcp.CallToolRequest, _ *mcp.CallToolResult) {
 			if debug {
 				log.Printf("[DEBUG] AfterCallTool tool=%s start", msg.Params.Name)
 			}
 			if isCaptureCall(msg.Params.Name) {
-				systray.SetTemplateIcon(iconData, iconData)
+				// Show after the shot so user sees what happened
+				notify.ShowBalloon(balloonText(ctx, msg))
+			} else {
+				notify.HideBalloon()
 			}
-			notify.HideBalloon()
 			if debug {
 				log.Printf("[DEBUG] AfterCallTool tool=%s done", msg.Params.Name)
 			}
@@ -339,8 +357,51 @@ func runMCPServer(listener net.Listener) {
 	}
 }
 
-// isCaptureCall returns true for screenshot tools whose balloon/icon would
-// pollute the captured image.
+// resolveProjectLabel queries the client's roots to build a short label
+// like "[MyProject] " for the popover. Returns empty string on failure.
+func resolveProjectLabel(ctx context.Context) string {
+	session := server.ClientSessionFromContext(ctx)
+	if session == nil {
+		return ""
+	}
+
+	home, _ := os.UserHomeDir()
+
+	// Try to get the project path from roots (queries the CLIENT, e.g. Claude Code)
+	if rs, ok := session.(server.SessionWithRoots); ok {
+		result, err := rs.ListRoots(ctx, mcp.ListRootsRequest{})
+		if err != nil {
+			log.Printf("[popover] ListRoots failed: %v", err)
+		} else if result != nil && len(result.Roots) > 0 {
+			root := result.Roots[0]
+			log.Printf("[popover] root: name=%q uri=%q", root.Name, root.URI)
+			// Extract path from file:// URI and abbreviate home dir
+			uri := root.URI
+			if strings.HasPrefix(uri, "file://") {
+				dir := strings.TrimPrefix(uri, "file://")
+				if home != "" && strings.HasPrefix(dir, home) {
+					dir = "~" + dir[len(home):]
+				}
+				if dir != "" && dir != "." {
+					return dir
+				}
+			}
+		}
+	}
+
+	// Fall back to client name + version (e.g. "claude-code 1.0.29")
+	if ci, ok := session.(server.SessionWithClientInfo); ok {
+		info := ci.GetClientInfo()
+		log.Printf("[popover] clientInfo: name=%q version=%q", info.Name, info.Version)
+		if info.Name != "" {
+			return info.Name
+		}
+	}
+
+	return ""
+}
+
+// isCaptureCall returns true for standalone screenshot tools.
 func isCaptureCall(name string) bool {
 	return name == "capture_window" || name == "capture_screen"
 }
@@ -352,21 +413,37 @@ func describeTool(msg *mcp.CallToolRequest) string {
 	switch msg.Params.Name {
 	case "do":
 		if actions, ok := args["actions"].([]any); ok && len(actions) > 0 {
+			var app string
 			var types []string
 			for _, a := range actions {
-				if m, ok := a.(map[string]any); ok {
-					if t, ok := m["type"].(string); ok {
-						types = append(types, t)
+				m, ok := a.(map[string]any)
+				if !ok {
+					continue
+				}
+				if t, ok := m["type"].(string); ok {
+					types = append(types, t)
+				}
+				// Capture target app from first action that has one
+				if app == "" {
+					if v, ok := m["app"].(string); ok && v != "" {
+						app = v
 					}
 				}
 			}
+			desc := strings.Join(types, " → ")
+			if app != "" {
+				return fmt.Sprintf("do [%s]: %s", app, desc)
+			}
 			if len(types) > 0 {
-				return fmt.Sprintf("do: %s", strings.Join(types, " → "))
+				return "do: " + desc
 			}
 		}
 		return "do"
 	case "shell":
 		if action, ok := args["action"].(string); ok {
+			if sid, ok := args["session_id"].(string); ok && sid != "" {
+				return fmt.Sprintf("shell: %s (%s)", action, sid)
+			}
 			return fmt.Sprintf("shell: %s", action)
 		}
 		return "shell"
@@ -385,23 +462,25 @@ func describeTool(msg *mcp.CallToolRequest) string {
 			return fmt.Sprintf("help: %s", topic)
 		}
 		return "help"
+	case "capture_window":
+		if app, ok := args["app_name"].(string); ok && app != "" {
+			return fmt.Sprintf("capture: %s", app)
+		}
+		return "capture_window"
+	case "capture_screen":
+		return "capture_screen"
+	case "alert":
+		if active, ok := args["active"].(bool); ok {
+			if active {
+				return "alert: ON"
+			}
+			return "alert: OFF"
+		}
+		return "alert"
 	default:
 		return msg.Params.Name
 	}
 }
-
-// transparentIconData is a 1x1 transparent PNG for temporarily hiding the
-// systray icon during screenshots. Pre-computed once at init.
-var transparentIconData = func() []byte {
-	img := image.NewNRGBA(image.Rect(0, 0, 1, 1))
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		// Infallible for a 1x1 in-memory NRGBA image; log and return icon as fallback.
-		log.Printf("transparentIcon: png.Encode failed: %v", err)
-		return iconData
-	}
-	return buf.Bytes()
-}()
 
 // 22x22 template icon for macOS menu bar - monitor with capture dot
 var iconData = []byte{

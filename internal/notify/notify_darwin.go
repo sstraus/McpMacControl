@@ -30,8 +30,8 @@ func StopWarn() {
 	C.stopWarnFlash()
 }
 
-// ShowBalloon displays a floating HUD near the menu bar with the given text.
-// Auto-dismisses after 3 seconds. Call HideBalloon to dismiss earlier.
+// ShowBalloon displays a native popover anchored to the systray icon.
+// Stays visible for at least 5 seconds. Call HideBalloon to dismiss after that.
 func ShowBalloon(text string) {
 	cstr := C.CString(text)
 	defer C.free(unsafe.Pointer(cstr))

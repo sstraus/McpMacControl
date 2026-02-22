@@ -190,6 +190,12 @@ func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 		}
 	}
 
+	// Validate that coordinate-based actions have an app context.
+	// Either via explicit "app" field or a preceding "focus" action.
+	if err := validateAppContext(actions); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	// Check Accessibility permission only when the batch includes actions that need it.
 	// Screenshot-only batches only need Screen Recording (checked lazily in executeScreenshot).
 	// Use HasAccessibilityPermission() instead of EnsureAllPermissions() to avoid
@@ -205,9 +211,30 @@ func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 		return mcp.NewToolResultError("Accessibility permission required. Grant access in System Settings > Privacy & Security > Accessibility"), nil
 	}
 
-	// Execute actions
+	// Execute actions, propagating app context from focus actions.
+	// When a focus action sets an app, subsequent coordinate-based actions
+	// (click, move, scroll, drag, screenshot) inherit that app if they
+	// don't specify one — so window-relative coordinates from screenshots
+	// map correctly without requiring app on every action.
 	results := make([]ActionResult, 0, len(actions))
+	var focusedApp string
 	for i, action := range actions {
+		// Track focused app from focus actions
+		if strings.ToLower(action.Type) == "focus" && action.App != "" {
+			focusedApp = action.App
+		}
+
+		// Inherit focusedApp into actions missing app. This ensures
+		// coordinate-based actions use window-relative coords and
+		// keyboard actions target the correct app.
+		if action.App == "" && focusedApp != "" {
+			switch strings.ToLower(action.Type) {
+			case "click", "move", "scroll", "drag", "screenshot",
+				"key", "type", "paste":
+				action.App = focusedApp
+			}
+		}
+
 		result := executeAction(i, action)
 		// Annotate result when an alias was used
 		if originalTypes[i] != "" && result.Success {
@@ -572,6 +599,48 @@ Examples:
 	return nil
 }
 
+// validateAppContext checks that coordinate-based actions have an app context,
+// either via an explicit "app" field or a preceding "focus" action in the batch.
+// This prevents the common mistake of using window-relative coordinates from a
+// screenshot as absolute screen coordinates.
+func validateAppContext(actions []Action) error {
+	var focusApp string
+	for i, action := range actions {
+		actionType := strings.ToLower(action.Type)
+
+		if actionType == "focus" && action.App != "" {
+			focusApp = action.App
+			continue
+		}
+
+		// Only check actions that use coordinates for window-relative positioning
+		switch actionType {
+		case "click", "move", "scroll", "drag":
+			if action.App != "" || focusApp != "" {
+				continue // has app context
+			}
+			return fmt.Errorf(`[Action %d] %s action has no app context.
+
+Coordinates (x=%d, y=%d) will be treated as absolute screen coordinates,
+which is almost never what you want. Screenshot coordinates are relative
+to the window — you must specify which window.
+
+Fix: add "app" to the action, or add a focus action earlier in the batch:
+
+  Option A — app on each action:
+    {"type": "%s", "app": "AppName", "x": %d, "y": %d}
+
+  Option B — focus once, then actions inherit it:
+    {"type": "focus", "app": "AppName"},
+    {"type": "%s", "x": %d, "y": %d}
+
+The "app" field is matched against window owner names from list_windows().`,
+				i, actionType, action.X, action.Y, actionType, action.X, action.Y, actionType, action.X, action.Y)
+		}
+	}
+	return nil
+}
+
 // Error message formatters
 func formatMissingActionsError() string {
 	return `Missing "actions" parameter.
@@ -778,17 +847,34 @@ func executeMove(index int, action Action) ActionResult {
 }
 
 func executeType(index int, action Action) ActionResult {
+	if action.App != "" {
+		if _, errResult := ensureWindowFocused(index, "type", action.App); errResult != nil {
+			return *errResult
+		}
+	}
+
 	input.TypeText(action.Text)
+
+	target := action.App
+	if target == "" {
+		target = "frontmost app"
+	}
 
 	return ActionResult{
 		Index:   index,
 		Type:    "type",
 		Success: true,
-		Message: fmt.Sprintf("typed %d chars", len(action.Text)),
+		Message: fmt.Sprintf("typed %d chars in %s", len(action.Text), target),
 	}
 }
 
 func executeKey(index int, action Action) ActionResult {
+	if action.App != "" {
+		if _, errResult := ensureWindowFocused(index, "key", action.App); errResult != nil {
+			return *errResult
+		}
+	}
+
 	success := input.KeyTap(action.Key, []string(action.Modifiers))
 	if !success {
 		return ActionResult{
@@ -804,11 +890,16 @@ func executeKey(index int, action Action) ActionResult {
 		msg = strings.Join(action.Modifiers, "+") + "+" + action.Key
 	}
 
+	target := action.App
+	if target == "" {
+		target = "frontmost app"
+	}
+
 	return ActionResult{
 		Index:   index,
 		Type:    "key",
 		Success: true,
-		Message: fmt.Sprintf("pressed %s", msg),
+		Message: fmt.Sprintf("pressed %s in %s", msg, target),
 	}
 }
 
@@ -850,6 +941,12 @@ func executeScroll(index int, action Action) ActionResult {
 }
 
 func executePaste(index int, action Action) ActionResult {
+	if action.App != "" {
+		if _, errResult := ensureWindowFocused(index, "paste", action.App); errResult != nil {
+			return *errResult
+		}
+	}
+
 	if err := input.PasteText(action.Text); err != nil {
 		return ActionResult{
 			Index:   index,
@@ -859,11 +956,16 @@ func executePaste(index int, action Action) ActionResult {
 		}
 	}
 
+	target := action.App
+	if target == "" {
+		target = "frontmost app"
+	}
+
 	return ActionResult{
 		Index:   index,
 		Type:    "paste",
 		Success: true,
-		Message: fmt.Sprintf("pasted %d chars via clipboard", len(action.Text)),
+		Message: fmt.Sprintf("pasted %d chars via clipboard in %s", len(action.Text), target),
 	}
 }
 

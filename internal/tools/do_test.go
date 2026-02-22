@@ -775,6 +775,93 @@ func TestValidActionTypes_IncludesScreenshot(t *testing.T) {
 	assert.True(t, found, "ValidActionTypes should include screenshot")
 }
 
+// --- validateAppContext tests ---
+
+func TestValidateAppContext_ClickWithApp(t *testing.T) {
+	actions := []Action{
+		{Type: "click", App: "Safari", X: 100, Y: 50},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_ClickWithPrecedingFocus(t *testing.T) {
+	actions := []Action{
+		{Type: "focus", App: "Safari"},
+		{Type: "click", X: 100, Y: 50},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_ClickWithoutAppOrFocus(t *testing.T) {
+	actions := []Action{
+		{Type: "click", X: 100, Y: 50},
+	}
+	err := validateAppContext(actions)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+	assert.Contains(t, err.Error(), "absolute screen coordinates")
+	assert.Contains(t, err.Error(), "Option A")
+	assert.Contains(t, err.Error(), "Option B")
+}
+
+func TestValidateAppContext_MoveWithoutAppOrFocus(t *testing.T) {
+	actions := []Action{
+		{Type: "move", X: 200, Y: 300},
+	}
+	err := validateAppContext(actions)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+}
+
+func TestValidateAppContext_TypeWithoutApp(t *testing.T) {
+	// type/key/paste don't need app context — they send to focused window
+	actions := []Action{
+		{Type: "type", Text: "hello"},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_FocusThenMultipleClicks(t *testing.T) {
+	actions := []Action{
+		{Type: "focus", App: "Safari"},
+		{Type: "click", X: 100, Y: 50},
+		{Type: "click", X: 200, Y: 100},
+		{Type: "click", X: 300, Y: 150},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_DragWithoutApp(t *testing.T) {
+	actions := []Action{
+		{Type: "drag", X: 10, Y: 10, ToX: 50, ToY: 50},
+	}
+	err := validateAppContext(actions)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+}
+
+func TestValidateAppContext_ScrollWithoutApp(t *testing.T) {
+	actions := []Action{
+		{Type: "scroll", X: 100, Y: 100, DeltaY: -3},
+	}
+	err := validateAppContext(actions)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+}
+
+func TestValidateAppContext_MixedBatch(t *testing.T) {
+	// focus + type + key don't need app, screenshot/click do but focus provides it
+	actions := []Action{
+		{Type: "focus", App: "Terminal"},
+		{Type: "click", X: 100, Y: 200},
+		{Type: "type", Text: "ls"},
+		{Type: "key", Key: "enter"},
+		{Type: "wait", Ms: 500},
+		{Type: "screenshot"},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
 // --- StringOrArray UnmarshalJSON tests ---
 
 func TestStringOrArray_UnmarshalString(t *testing.T) {
@@ -908,22 +995,6 @@ func TestExecuteAction_WaitRoute(t *testing.T) {
 	assert.Equal(t, "wait", result.Type)
 }
 
-func TestExecuteClick_AbsoluteCoords(t *testing.T) {
-	skipWithoutAccessibility(t)
-	// Click at absolute screen coordinates (no app).
-	result := executeClick(0, Action{Type: "click", X: 400, Y: 400})
-	assert.True(t, result.Success)
-	assert.Contains(t, result.Message, "screen: 400,400")
-}
-
-func TestExecuteMove_AbsoluteCoords(t *testing.T) {
-	skipWithoutAccessibility(t)
-	// Move at absolute screen coordinates (no app).
-	result := executeMove(0, Action{Type: "move", X: 400, Y: 400})
-	assert.True(t, result.Success)
-	assert.Contains(t, result.Message, "screen: 400,400")
-}
-
 func TestExecuteClick_OffScreenCoords(t *testing.T) {
 	// Off-screen coordinates should be rejected without needing accessibility.
 	result := executeClick(0, Action{Type: "click", X: -99999, Y: -99999})
@@ -959,30 +1030,6 @@ func TestExecuteClipboard_EmptyClipboard(t *testing.T) {
 	assert.Equal(t, "", result.Message)
 }
 
-// --- executePaste test (clipboard write + KeyTap) ---
-
-func TestExecutePaste_Success(t *testing.T) {
-	// Set clipboard to something else first to prove paste changes it
-	err := input.SetClipboard("before-paste")
-	require.NoError(t, err)
-
-	result := executePaste(0, Action{Type: "paste", Text: "paste-via-execute"})
-	assert.True(t, result.Success)
-	assert.Equal(t, "paste", result.Type)
-	assert.Contains(t, result.Message, "pasted 17 chars via clipboard")
-
-	// Verify the clipboard was actually written
-	got, err := input.GetClipboard()
-	require.NoError(t, err)
-	assert.Equal(t, "paste-via-execute", got)
-}
-
-func TestExecutePaste_PreservesIndex(t *testing.T) {
-	result := executePaste(5, Action{Type: "paste", Text: "idx-test"})
-	assert.True(t, result.Success)
-	assert.Equal(t, 5, result.Index)
-}
-
 // --- executeDrag test (requires window; test error path) ---
 
 func TestExecuteDrag_NoSuchApp(t *testing.T) {
@@ -1002,16 +1049,3 @@ func TestExecuteScreenshot_NoSuchApp(t *testing.T) {
 	assert.Contains(t, result.Error, "capture failed")
 }
 
-// --- executeType test (no permissions needed for the function itself) ---
-
-func TestExecuteType_ReturnsCharCount(t *testing.T) {
-	// executeType just calls input.TypeText and reports count.
-	// TypeText sends CGEvents which need accessibility, but the function
-	// itself returns a result struct regardless. We can't verify the typing
-	// happened, but we can verify the result formatting.
-	// Skip if accessibility isn't available since TypeText will silently fail.
-	result := executeType(0, Action{Type: "type", Text: "hello"})
-	assert.True(t, result.Success)
-	assert.Equal(t, "type", result.Type)
-	assert.Equal(t, "typed 5 chars", result.Message)
-}

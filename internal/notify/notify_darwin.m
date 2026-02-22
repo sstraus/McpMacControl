@@ -115,95 +115,152 @@ void stopWarnFlash(void) {
     });
 }
 
-// --- Balloon notification (floating HUD near menu bar) ---
+// --- Popover notification (anchored to systray icon) ---
 
-static NSWindow *balloonWindow = nil;
-static NSTextField *balloonLabel = nil;
-static NSTimer *balloonTimer = nil;
+#import <objc/runtime.h>
 
-// showBalloon displays a dark floating HUD just below the menu bar on the
-// primary display. Auto-dismisses after 3 seconds. Calling again resets the
-// timer and updates the text.
+// PopoverViewController provides the content view for the NSPopover.
+// Two lines: project name (bold) on top, tool description below.
+@interface PopoverViewController : NSViewController
+@property (nonatomic, strong) NSTextField *titleLabel;
+@property (nonatomic, strong) NSTextField *detailLabel;
+@end
+
+@implementation PopoverViewController
+
+- (void)loadView {
+    CGFloat w = 300;
+    CGFloat h = 52;
+    NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, h)];
+
+    // Project name (top line)
+    self.titleLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 28, w - 24, 18)];
+    [self.titleLabel setBezeled:NO];
+    [self.titleLabel setDrawsBackground:NO];
+    [self.titleLabel setEditable:NO];
+    [self.titleLabel setSelectable:NO];
+    [self.titleLabel setFont:[NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightBold]];
+    [self.titleLabel setLineBreakMode:NSLineBreakByTruncatingTail];
+    [self.titleLabel setAlignment:NSTextAlignmentCenter];
+    [container addSubview:self.titleLabel];
+
+    // Tool description (bottom line)
+    self.detailLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 6, w - 24, 18)];
+    [self.detailLabel setBezeled:NO];
+    [self.detailLabel setDrawsBackground:NO];
+    [self.detailLabel setEditable:NO];
+    [self.detailLabel setSelectable:NO];
+    [self.detailLabel setFont:[NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular]];
+    [self.detailLabel setLineBreakMode:NSLineBreakByTruncatingTail];
+    [self.detailLabel setAlignment:NSTextAlignmentCenter];
+    [container addSubview:self.detailLabel];
+
+    self.view = container;
+}
+
+@end
+
+static NSPopover *statusPopover = nil;
+static PopoverViewController *popoverVC = nil;
+static NSTimer *popoverTimer = nil;
+
+// Minimum time the popover stays visible (seconds).
+static const NSTimeInterval kPopoverMinDuration = 5.0;
+
+// getStatusItemButton returns the NSStatusItem's button from the systray
+// library's AppDelegate, accessed via the Objective-C runtime.
+// Returns nil if the app delegate or status item is not available.
+static NSStatusBarButton* getStatusItemButton(void) {
+    id delegate = [NSApp delegate];
+    if (!delegate) return nil;
+
+    Ivar ivar = class_getInstanceVariable([delegate class], "statusItem");
+    if (!ivar) return nil;
+
+    NSStatusItem *si = object_getIvar(delegate, ivar);
+    if (!si) return nil;
+
+    return si.button;
+}
+
+// fadeAndClosePopover fades the popover content to transparent over 0.5s,
+// then closes the popover and resets alpha for the next show.
+static void fadeAndClosePopover(void) {
+    if (!statusPopover || !statusPopover.shown) return;
+
+    NSView *contentView = popoverVC.view;
+    [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
+        ctx.duration = 0.5;
+        contentView.animator.alphaValue = 0.0;
+    } completionHandler:^{
+        [statusPopover performClose:nil];
+        contentView.alphaValue = 1.0;
+    }];
+}
+
+// showBalloon displays a native popover anchored to the systray icon.
+// Text format: "title\ndetail" — first line is project name, second is tool info.
+// If no newline, the entire text goes to the detail line.
 void showBalloon(const char* text) {
-    // Copy the string before dispatch_async — the caller frees the original
-    // immediately after this function returns (Go defer C.free).
     char *copy = strdup(text);
     dispatch_async(dispatch_get_main_queue(), ^{
         NSString *str = [NSString stringWithUTF8String:copy];
         free(copy);
 
-        if (!balloonWindow) {
-            NSScreen *screen = [NSScreen mainScreen];
-            CGFloat screenWidth = screen.frame.size.width;
-            CGFloat screenTop = NSMaxY(screen.visibleFrame);
-            CGFloat bw = 420;
-            CGFloat bh = 40;
+        NSStatusBarButton *button = getStatusItemButton();
+        if (!button) return;
 
-            NSRect frame = NSMakeRect(
-                (screenWidth - bw) / 2,   // centered horizontally
-                screenTop - bh - 8,       // just below menu bar
-                bw, bh
-            );
-
-            balloonWindow = [[NSWindow alloc]
-                initWithContentRect:frame
-                          styleMask:NSWindowStyleMaskBorderless
-                            backing:NSBackingStoreBuffered
-                              defer:NO];
-
-            [balloonWindow setLevel:NSStatusWindowLevel + 1];
-            [balloonWindow setOpaque:NO];
-            [balloonWindow setBackgroundColor:[NSColor colorWithWhite:0.1 alpha:0.95]];
-            [balloonWindow setIgnoresMouseEvents:YES];
-            [balloonWindow setHasShadow:YES];
-            [balloonWindow setCollectionBehavior:
-                NSWindowCollectionBehaviorCanJoinAllSpaces |
-                NSWindowCollectionBehaviorStationary];
-
-            [balloonWindow.contentView setWantsLayer:YES];
-            balloonWindow.contentView.layer.cornerRadius = 10.0;
-            balloonWindow.contentView.layer.masksToBounds = YES;
-            balloonWindow.contentView.layer.borderColor = [[NSColor colorWithRed:0.3 green:0.6 blue:1.0 alpha:0.6] CGColor];
-            balloonWindow.contentView.layer.borderWidth = 1.5;
-
-            balloonLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 6, bw - 24, 28)];
-            [balloonLabel setBezeled:NO];
-            [balloonLabel setDrawsBackground:NO];
-            [balloonLabel setEditable:NO];
-            [balloonLabel setSelectable:NO];
-            [balloonLabel setTextColor:[NSColor colorWithRed:0.85 green:0.9 blue:1.0 alpha:1.0]];
-            [balloonLabel setFont:[NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightMedium]];
-            [balloonLabel setLineBreakMode:NSLineBreakByTruncatingTail];
-            [balloonLabel setAlignment:NSTextAlignmentCenter];
-            [balloonWindow.contentView addSubview:balloonLabel];
+        if (!statusPopover) {
+            popoverVC = [[PopoverViewController alloc] init];
+            statusPopover = [[NSPopover alloc] init];
+            statusPopover.contentViewController = popoverVC;
+            statusPopover.contentSize = NSMakeSize(300, 52);
+            statusPopover.behavior = NSPopoverBehaviorApplicationDefined;
+            statusPopover.animates = YES;
         }
 
-        [balloonLabel setStringValue:str];
-        [balloonWindow orderFrontRegardless];
+        // Ensure full opacity (may have been mid-fade)
+        popoverVC.view.alphaValue = 1.0;
 
-        // Reset auto-dismiss timer (3 seconds)
-        if (balloonTimer) {
-            [balloonTimer invalidate];
+        if (!statusPopover.shown) {
+            [statusPopover showRelativeToRect:button.bounds
+                                       ofView:button
+                                preferredEdge:NSMinYEdge];
         }
-        balloonTimer = [NSTimer scheduledTimerWithTimeInterval:3.0
+
+        // Split on first newline: title (project) + detail (tool)
+        NSRange nl = [str rangeOfString:@"\n"];
+        if (nl.location != NSNotFound) {
+            [popoverVC.titleLabel setStringValue:[str substringToIndex:nl.location]];
+            [popoverVC.detailLabel setStringValue:[str substringFromIndex:nl.location + 1]];
+        } else {
+            [popoverVC.titleLabel setStringValue:@""];
+            [popoverVC.detailLabel setStringValue:str];
+        }
+
+        // Reset auto-dismiss timer
+        if (popoverTimer) {
+            [popoverTimer invalidate];
+        }
+        popoverTimer = [NSTimer scheduledTimerWithTimeInterval:kPopoverMinDuration
                                                        repeats:NO
                                                          block:^(NSTimer *timer) {
-            [balloonWindow orderOut:nil];
-            balloonTimer = nil;
+            fadeAndClosePopover();
+            popoverTimer = nil;
         }];
     });
 }
 
-// hideBalloon hides the balloon immediately.
+// hideBalloon fades out the popover. If the minimum display time hasn't
+// elapsed yet, the timer handles the fade when it fires.
 void hideBalloon(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (balloonTimer) {
-            [balloonTimer invalidate];
-            balloonTimer = nil;
-        }
-        if (balloonWindow) {
-            [balloonWindow orderOut:nil];
-        }
+        if (!statusPopover || !statusPopover.shown) return;
+
+        // If a timer is still running, let it handle the fade.
+        if (popoverTimer) return;
+
+        fadeAndClosePopover();
     });
 }
 
