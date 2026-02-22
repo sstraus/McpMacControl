@@ -14,13 +14,13 @@
 
 ## P1 - Critical (Block Merge)
 
-- [ ] **#1 [GO]** Slice append mutates backing array in `normalizeAction` (Confidence: 95)
+- [x] **#1 [GO]** Slice append mutates backing array in `normalizeAction` (Confidence: 95) — FIXED in 6d397fd
   - Location: `internal/tools/do.go:102`
   - Issue: `append(parts[:len(parts)-1], action.Modifiers...)` shares the backing array with `parts`. When `action.Modifiers` is non-empty, append overwrites `parts[len(parts)-1]` which was already assigned to `action.Key`.
   - Fix: Use full slice expression `parts[:len(parts)-1:len(parts)-1]` to cap the subslice
   - Agent: go-reviewer
 
-- [ ] **#2 [TEST]** No test for off-screen absolute coordinates rejection (Confidence: 95)
+- [x] **#2 [TEST]** No test for off-screen absolute coordinates rejection (Confidence: 95) — FIXED in 6d397fd
   - Location: `internal/tools/do_test.go` (missing)
   - Issue: The `IsOnDisplay` guard in `executeClick`/`executeMove` is the primary safety check for the new absolute-coords feature. Only the happy path is tested. A regression removing the guard would go undetected.
   - Fix: Add `TestExecuteClick_OffScreenCoords` and `TestExecuteMove_OffScreenCoords` with coords like `(-99999,-99999)`
@@ -30,49 +30,49 @@
 
 ## P2 - Important (Fix Before/After Merge)
 
-- [ ] **#3 [SECURITY]** Unbounded `wait` duration enables sleep-DoS (Confidence: 95)
+- [x] **#3 [SECURITY]** Unbounded `wait` duration enables sleep-DoS (Confidence: 95) — FIXED in 6d397fd
   - Location: `internal/tools/do.go:755` and `internal/tools/shell.go:140,171`
   - Issue: `wait` action and shell `wait_ms` accept any positive integer. A call with `ms: 2147483647` blocks the goroutine for ~24 days.
   - Fix: Cap at 30,000ms (30 seconds) in validation
   - Agent: security-reviewer
 
-- [ ] **#4 [ARCH]** Duplicated window-matching logic across 3 sites (Confidence: 95)
+- [ ] **#4 [ARCH]** Duplicated window-matching logic across 3 sites (Confidence: 95) — STORY 003-a1c3
   - Location: `internal/input/input.go:69-113`, `internal/capture/window.go:67-124`, `internal/tools/do.go:850-864`
   - Issue: The two-pass matching algorithm (owner name first, title second) is implemented twice. A third variant in `do.go:findWindowPID` uses case-sensitive comparison and has no title fallback, creating divergent behavior.
   - Fix: Extract `capture.FindWindow(appName string) (*WindowInfo, error)` as the canonical implementation
   - Agents: architecture, simplicity, performance (all flagged independently)
 
-- [ ] **#5 [PERF]** Double CGWindowList fetch per app-targeted action (Confidence: 97)
+- [ ] **#5 [PERF]** Double CGWindowList fetch per app-targeted action (Confidence: 97) — STORY 003-a1c3
   - Location: `internal/tools/do.go:640,644`
   - Issue: Every click/move/scroll/drag calls `ListWindows` twice: once in `ensureWindowFocused` (via `findWindowPID`) and once in `ClickInWindow` (via `findWindow`). For a 10-action batch, that's 20 syscalls reducible to 1-2.
   - Fix: Unify `findWindowPID` and `findWindow` into a single lookup; pass resolved window info through the execution chain
   - Agent: performance-reviewer
 
-- [ ] **#6 [GO]** `log.Fatalf` inside goroutine bypasses deferred cleanup (Confidence: 88)
+- [x] **#6 [GO]** `log.Fatalf` inside goroutine bypasses deferred cleanup (Confidence: 88) — FIXED in 6d397fd
   - Location: `main.go:152,158`
   - Issue: `log.Fatalf` calls `os.Exit(1)` inside the server goroutine, skipping `defer listener.Close()` and `defer os.Remove(sockPath)`. Leaves stale socket on disk.
   - Fix: Replace with `log.Printf` + `close(quitCh)` + `systray.Quit()` + `return`
   - Agent: go-reviewer
 
-- [ ] **#7 [SILENT]** Handshake error discarded on reuse path (Confidence: 85)
+- [x] **#7 [SILENT]** Handshake error discarded on reuse path (Confidence: 85) — FIXED in 6d397fd
   - Location: `internal/bridge/proxy.go:178`
   - Issue: When handshake fails on an existing socket, the error is silently dropped. Log says "Stale socket detected" but not why the handshake failed.
   - Fix: `log.Printf("Stale socket detected (%v), removing...", err, ...)`
   - Agent: silent-failure-hunter
 
-- [ ] **#8 [TEST]** Confirmed duplicate test (Confidence: 100)
+- [x] **#8 [TEST]** Confirmed duplicate test (Confidence: 100) — FIXED in 6d397fd
   - Location: `internal/tools/do_test.go:94`
   - Issue: `TestValidateAction_MoveWithoutApp_Duplicate` is byte-for-byte identical to `TestValidateAction_MoveWithoutApp` at line 51.
   - Fix: Delete the duplicate
   - Agents: test-quality, simplicity (both flagged)
 
-- [ ] **#9 [PERF]** `transparentIcon()` re-encodes PNG on every call (Confidence: 95)
+- [x] **#9 [PERF]** `transparentIcon()` re-encodes PNG on every call (Confidence: 95) — FIXED in 6d397fd
   - Location: `main.go:375-380`, called at `main.go:227`
   - Issue: Allocates image + PNG-encodes on every capture call (called twice per screenshot). Output is always identical.
   - Fix: Pre-compute as `var transparentIconData = func() []byte { ... }()`
   - Agents: performance, simplicity, silent-failure (all flagged)
 
-- [ ] **#10 [SILENT]** `findWindow()` silently falls back to off-screen window (Confidence: 80)
+- [x] **#10 [SILENT]** `findWindow()` silently falls back to off-screen window (Confidence: 80) — FIXED in 6d397fd
   - Location: `internal/input/input.go:111`
   - Issue: When all matched windows are off-screen, returns first match without logging. Action appears to succeed but has no visible effect.
   - Fix: Add `log.Printf` before the fallback return
