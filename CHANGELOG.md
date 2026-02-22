@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0
+
+### Features
+- **Native popover** — replaced floating HUD with an NSPopover anchored to the systray icon. Two-line layout: project path (bold) and structured tool description. Fades out after 5 seconds
+- **Project identification** — popover shows the calling project's path (via MCP ListRoots), so you can tell which Claude Code session is triggering actions
+- **Structured tool descriptions** — popover shows target app, session IDs, and action chains (e.g. `do [Safari]: focus → click → type`)
+- **App context inheritance** — `focus` action propagates app to subsequent `click`, `move`, `key`, `type`, `paste`, `scroll`, `drag`, and `screenshot` actions in the same batch, so coordinates from screenshots map correctly without repeating `app` on every action
+- **Input target verification** — `key`, `type`, and `paste` actions now verify the target app is focused before sending input, preventing keystrokes from reaching the wrong app
+- **App context validation** — coordinate-based actions without `app` or a preceding `focus` are rejected with a rich error explaining both fix options
+
+### Fixes
+- **Screenshot popover timing** — popover appears after captures instead of before, so it doesn't pollute screenshots
+
+### Removed
+- System-interacting tests that sent real clicks and keystrokes during `go test`
+
 ## 1.1.0
 
 ### Features

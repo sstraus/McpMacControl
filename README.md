@@ -69,7 +69,10 @@ Grant both in **System Settings > Privacy & Security**. The app registers itself
 ## Features
 
 - **Menu bar icon** shows when MCP server is running
+- **Native popover** — drops down from the systray icon showing the calling project path and current operation. Fades out after 5 seconds
 - **Action notifications** — sound + orange border flash before mouse/keyboard automation, so you know when the AI is controlling your Mac. Toggle from the menu bar
+- **App context inheritance** — `focus` propagates to subsequent actions in a batch, so you don't need `app` on every action
+- **Input safety** — `key`, `type`, and `paste` verify the target app is focused before sending input
 - **Single binary** in a signed `.app` bundle
 - **Auto-exit** when Claude disconnects
 - **Region capture** to save tokens
