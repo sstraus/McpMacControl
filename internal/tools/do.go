@@ -639,11 +639,12 @@ func executeClick(index int, action Action) ActionResult {
 		}
 		input.ClickMouse(absX, absY, int(button), action.Double)
 	} else {
-		if errResult := ensureWindowFocused(index, "click", action.App); errResult != nil {
+		wi, errResult := ensureWindowFocused(index, "click", action.App)
+		if errResult != nil {
 			return *errResult
 		}
 		var err error
-		absX, absY, err = input.ClickInWindow(action.App, action.X, action.Y, button, action.Double)
+		absX, absY, err = input.ClickInWindowInfo(wi, action.X, action.Y, button, action.Double)
 		if err != nil {
 			return ActionResult{
 				Index:   index,
@@ -690,11 +691,12 @@ func executeMove(index int, action Action) ActionResult {
 		}
 		input.MoveMouse(absX, absY)
 	} else {
-		if errResult := ensureWindowFocused(index, "move", action.App); errResult != nil {
+		wi, errResult := ensureWindowFocused(index, "move", action.App)
+		if errResult != nil {
 			return *errResult
 		}
 		var err error
-		absX, absY, err = input.MoveMouseToWindow(action.App, action.X, action.Y)
+		absX, absY, err = input.MoveMouseToWindowInfo(wi, action.X, action.Y)
 		if err != nil {
 			return ActionResult{
 				Index:   index,
@@ -765,11 +767,12 @@ func executeWait(index int, action Action) ActionResult {
 }
 
 func executeScroll(index int, action Action) ActionResult {
-	if errResult := ensureWindowFocused(index, "scroll", action.App); errResult != nil {
+	wi, errResult := ensureWindowFocused(index, "scroll", action.App)
+	if errResult != nil {
 		return *errResult
 	}
 	// Move mouse to the scroll position in window, then scroll
-	_, _, err := input.MoveMouseToWindow(action.App, action.X, action.Y)
+	_, _, err := input.MoveMouseToWindowInfo(wi, action.X, action.Y)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -827,10 +830,11 @@ func executeClipboard(index int, _ Action) ActionResult {
 }
 
 func executeDrag(index int, action Action) ActionResult {
-	if errResult := ensureWindowFocused(index, "drag", action.App); errResult != nil {
+	wi, errResult := ensureWindowFocused(index, "drag", action.App)
+	if errResult != nil {
 		return *errResult
 	}
-	fromAbsX, fromAbsY, toAbsX, toAbsY, err := input.DragInWindow(action.App, action.X, action.Y, action.ToX, action.ToY)
+	fromAbsX, fromAbsY, toAbsX, toAbsY, err := input.DragInWindowInfo(wi, action.X, action.Y, action.ToX, action.ToY)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -848,42 +852,35 @@ func executeDrag(index int, action Action) ActionResult {
 	}
 }
 
-// findWindowPID finds the PID for an app by name, returning the PID and window index (always 0 for first window).
-func findWindowPID(appName string) (pid int, windowIndex int, err error) {
-	windows, err := capture.ListWindows(appName)
+// findWindowPID finds the PID for an app by name using the canonical
+// two-pass matching algorithm.
+func findWindowPID(appName string) (int, error) {
+	w, err := capture.FindWindow(appName)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to list windows: %w", err)
+		return 0, err
 	}
-
-	// Find exact match
-	for _, w := range windows {
-		if w.OwnerName == appName {
-			return w.OwnerPID, 0, nil
-		}
-	}
-
-	return 0, 0, fmt.Errorf("window not found for app: %s", appName)
+	return w.OwnerPID, nil
 }
 
 // ensureWindowFocused brings the target app's window to front if it is not
-// already the frontmost application. Returns a non-nil ActionResult only on
-// error (caller should return it). Skips the focus + settle delay when the
-// app is already active.
-func ensureWindowFocused(index int, actionType string, appName string) *ActionResult {
-	pid, windowIndex, err := findWindowPID(appName)
+// already the frontmost application. Returns the resolved WindowInfo on
+// success (eliminating the need for a second window lookup). Returns a
+// non-nil ActionResult only on error (caller should return it).
+func ensureWindowFocused(index int, actionType string, appName string) (*capture.WindowInfo, *ActionResult) {
+	wi, err := capture.FindWindow(appName)
 	if err != nil {
-		return &ActionResult{
+		return nil, &ActionResult{
 			Index:   index,
 			Type:    actionType,
 			Success: false,
 			Error:   fmt.Sprintf("%v\n\nTip: Use list_windows() to verify the app name exists.", err),
 		}
 	}
-	if input.IsFrontmostApp(pid) {
-		return nil
+	if input.IsFrontmostApp(wi.OwnerPID) {
+		return wi, nil
 	}
-	if err := input.FocusWindow(pid, windowIndex); err != nil {
-		return &ActionResult{
+	if err := input.FocusWindow(wi.OwnerPID, 0); err != nil {
+		return nil, &ActionResult{
 			Index:   index,
 			Type:    actionType,
 			Success: false,
@@ -891,11 +888,11 @@ func ensureWindowFocused(index int, actionType string, appName string) *ActionRe
 		}
 	}
 	time.Sleep(100 * time.Millisecond) // let focus settle
-	return nil
+	return wi, nil
 }
 
 func executeFocus(index int, action Action) ActionResult {
-	pid, windowIndex, err := findWindowPID(action.App)
+	pid, err := findWindowPID(action.App)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -905,7 +902,7 @@ func executeFocus(index int, action Action) ActionResult {
 		}
 	}
 
-	if err := input.FocusWindow(pid, windowIndex); err != nil {
+	if err := input.FocusWindow(pid, 0); err != nil {
 		return ActionResult{
 			Index:   index,
 			Type:    "focus",
@@ -923,7 +920,7 @@ func executeFocus(index int, action Action) ActionResult {
 }
 
 func executeMinimize(index int, action Action) ActionResult {
-	pid, windowIndex, err := findWindowPID(action.App)
+	pid, err := findWindowPID(action.App)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -933,7 +930,7 @@ func executeMinimize(index int, action Action) ActionResult {
 		}
 	}
 
-	if err := input.MinimizeWindow(pid, windowIndex); err != nil {
+	if err := input.MinimizeWindow(pid, 0); err != nil {
 		return ActionResult{
 			Index:   index,
 			Type:    "minimize",
@@ -951,7 +948,7 @@ func executeMinimize(index int, action Action) ActionResult {
 }
 
 func executeRestore(index int, action Action) ActionResult {
-	pid, windowIndex, err := findWindowPID(action.App)
+	pid, err := findWindowPID(action.App)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -961,7 +958,7 @@ func executeRestore(index int, action Action) ActionResult {
 		}
 	}
 
-	if err := input.RestoreWindow(pid, windowIndex); err != nil {
+	if err := input.RestoreWindow(pid, 0); err != nil {
 		return ActionResult{
 			Index:   index,
 			Type:    "restore",
@@ -979,7 +976,7 @@ func executeRestore(index int, action Action) ActionResult {
 }
 
 func executeClose(index int, action Action) ActionResult {
-	pid, windowIndex, err := findWindowPID(action.App)
+	pid, err := findWindowPID(action.App)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -989,7 +986,7 @@ func executeClose(index int, action Action) ActionResult {
 		}
 	}
 
-	if err := input.CloseWindow(pid, windowIndex); err != nil {
+	if err := input.CloseWindow(pid, 0); err != nil {
 		return ActionResult{
 			Index:   index,
 			Type:    "close",
@@ -1007,7 +1004,7 @@ func executeClose(index int, action Action) ActionResult {
 }
 
 func executeResize(index int, action Action) ActionResult {
-	pid, windowIndex, err := findWindowPID(action.App)
+	pid, err := findWindowPID(action.App)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
@@ -1017,7 +1014,7 @@ func executeResize(index int, action Action) ActionResult {
 		}
 	}
 
-	if err := input.ResizeWindow(pid, windowIndex, action.Width, action.Height); err != nil {
+	if err := input.ResizeWindow(pid, 0, action.Width, action.Height); err != nil {
 		return ActionResult{
 			Index:   index,
 			Type:    "resize",

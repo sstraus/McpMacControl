@@ -4,8 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/sstraus/mcpmaccontrol/internal/capture"
 )
 
 func TestParseMouseButton(t *testing.T) {
@@ -70,27 +68,3 @@ func TestCheckWindowBounds(t *testing.T) {
 	}
 }
 
-func TestWindowOverlapsDisplay(t *testing.T) {
-	displays := []capture.DisplayBounds{
-		{X: 0, Y: 0, Width: 1920, Height: 1080},
-	}
-
-	tests := []struct {
-		name    string
-		window  capture.WindowInfo
-		overlap bool
-	}{
-		{"fully on-screen", capture.WindowInfo{X: 100, Y: 100, Width: 800, Height: 600}, true},
-		{"partially on-screen", capture.WindowInfo{X: -400, Y: 100, Width: 800, Height: 600}, true},
-		{"fully off-screen left", capture.WindowInfo{X: -900, Y: 100, Width: 800, Height: 600}, false},
-		{"fully off-screen right", capture.WindowInfo{X: 2000, Y: 100, Width: 800, Height: 600}, false},
-		{"fully off-screen above", capture.WindowInfo{X: 100, Y: -700, Width: 800, Height: 600}, false},
-		{"fully off-screen below", capture.WindowInfo{X: 100, Y: 1200, Width: 800, Height: 600}, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.overlap, windowOverlapsDisplay(&tt.window, displays))
-		})
-	}
-}

@@ -65,54 +65,9 @@ func isPermissionError(output string) bool {
 // CaptureWindowByName finds and captures a window by app name and optional title.
 // Returns the captured image and the window info.
 func CaptureWindowByName(appName, windowTitle string, hideShadow bool) (image.Image, *WindowInfo, error) {
-	windows, err := ListWindows(appName)
+	target, err := FindWindowWithTitle(appName, windowTitle)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list windows: %w", err)
-	}
-
-	if len(windows) == 0 {
-		return nil, nil, fmt.Errorf("no windows found for app %q", appName)
-	}
-
-	// Two-pass match: prefer owner name match, fall back to title match.
-	// This lets callers use either the process name ("Safari") or the
-	// window title ("TUI Commander") as appName.
-	appNameLower := strings.ToLower(appName)
-	windowTitleLower := strings.ToLower(windowTitle)
-
-	var target *WindowInfo
-	// Pass 1: match on owner name (original behavior)
-	for i := range windows {
-		w := &windows[i]
-		if !strings.EqualFold(w.OwnerName, appName) {
-			continue
-		}
-		if windowTitle != "" && !strings.Contains(strings.ToLower(w.Name), windowTitleLower) {
-			continue
-		}
-		target = w
-		break
-	}
-	// Pass 2: match on window title if no owner match found
-	if target == nil {
-		for i := range windows {
-			w := &windows[i]
-			if !strings.Contains(strings.ToLower(w.Name), appNameLower) {
-				continue
-			}
-			if windowTitle != "" && !strings.Contains(strings.ToLower(w.Name), windowTitleLower) {
-				continue
-			}
-			target = w
-			break
-		}
-	}
-
-	if target == nil {
-		if windowTitle != "" {
-			return nil, nil, fmt.Errorf("no window found for app %q with title containing %q", appName, windowTitle)
-		}
-		return nil, nil, fmt.Errorf("no window found for app %q", appName)
+		return nil, nil, err
 	}
 
 	img, err := CaptureWindow(target.ID, hideShadow)

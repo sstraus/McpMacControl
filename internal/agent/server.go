@@ -574,14 +574,11 @@ func (s *Server) handleResize(req *protocol.Request) *protocol.Response {
 // Helper functions
 
 func findWindowPID(appName string) (int, error) {
-	windows, err := capture.ListWindows(appName)
+	w, err := capture.FindWindow(appName)
 	if err != nil {
 		return 0, err
 	}
-	if len(windows) == 0 {
-		return 0, fmt.Errorf("no window found for app: %s", appName)
-	}
-	return windows[0].OwnerPID, nil
+	return w.OwnerPID, nil
 }
 
 func getString(params map[string]any, key, defaultVal string) string {
