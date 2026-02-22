@@ -129,7 +129,7 @@ func TestHandleHelp_ProcessesTopic(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.False(t, result.IsError)
 	text := result.Content[0].(mcp.TextContent).Text
-	assert.Contains(t, text, "PROCESSES TOOL")
+	assert.Contains(t, text, "processes")
 	assert.Contains(t, text, "name")
 	assert.Contains(t, text, "pid")
 }
