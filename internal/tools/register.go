@@ -34,7 +34,7 @@ func allTools() []toolDef {
 		},
 		{
 			mcp.NewTool("capture_window",
-				mcp.WithDescription("Screenshot a window or a REGION within it. Use region_* params to capture only a portion (e.g., just a toolbar, sidebar, or dialog) - saves tokens. Returns image + click coordinates."),
+				mcp.WithDescription("Screenshot a window or a REGION within it. Use region_* params to capture only a portion (e.g., just a toolbar, sidebar, or dialog) - saves tokens. Returns image + click coordinates.\n\nPrefer do([{type:\"screenshot\", app:\"Name\"}]) when you don't need region capture — it can be batched with other actions in a single call."),
 				mcp.WithString("app_name",
 					mcp.Required(),
 					mcp.Description("App name (e.g., 'Safari', 'Finder')"),
@@ -77,7 +77,7 @@ func allTools() []toolDef {
 		},
 		{
 			mcp.NewTool("do",
-				mcp.WithDescription("Execute actions: click, type, key, scroll, wait, screenshot. Call help() first."),
+				mcp.WithDescription("Execute actions: click, type, key, scroll, wait, screenshot. Call help() first.\n\nIMPORTANT: Always batch multiple actions into a SINGLE do() call for efficiency. Each do() call is one round-trip. Use the screenshot action for visual checkpoints WITHIN a batch instead of separate capture_window calls.\n\nExample: do([click, wait, screenshot, click, wait, screenshot]) = 1 call instead of 4."),
 				mcp.WithArray("actions",
 					mcp.Required(),
 					mcp.Description("Array of actions to execute in sequence"),

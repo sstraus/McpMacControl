@@ -25,6 +25,16 @@ WORKFLOW:
 3. Analyze image, find the CENTER of the target element
 4. do([{type:"click", app:"Safari", x:100, y:50}])
 
+EFFICIENCY: Batch all actions into a SINGLE do() call when possible.
+Each tool call is a network round-trip. Instead of:
+  do([click]) → capture_window() → do([click]) → capture_window()  (4 calls)
+Use:
+  do([click, wait, screenshot, click, wait, screenshot])            (1 call)
+
+The "screenshot" action inside do() captures a window or screen inline,
+returning images alongside action results. Use capture_window only when
+you need region capture or window_title matching.
+
 IMPORTANT: Always aim for the CENTER of buttons, links, and UI elements.
 Clicking near edges often misses. Estimate the element's bounding box
 and use its midpoint, not its border.
