@@ -1125,7 +1125,8 @@ func executeScreenshot(index int, action Action) ActionResult {
 			}
 		}
 		img = capture.ResizeToTarget(capturedImg, winInfo.Width, winInfo.Height)
-		description = fmt.Sprintf("%s (%dx%d)", winInfo.OwnerName, winInfo.Width, winInfo.Height)
+		description = fmt.Sprintf("%s (%dx%d) — pixel coords in image = x,y for do() actions with app:\"%s\"",
+			winInfo.OwnerName, winInfo.Width, winInfo.Height, action.App)
 	} else {
 		// Capture full screen
 		capturedImg, err := capture.CaptureScreen(0)
@@ -1139,7 +1140,8 @@ func executeScreenshot(index int, action Action) ActionResult {
 		}
 		bounds := capturedImg.Bounds()
 		img = capturedImg
-		description = fmt.Sprintf("screen (%dx%d)", bounds.Dx(), bounds.Dy())
+		description = fmt.Sprintf("screen (%dx%d) — pixel coords in image = absolute x,y for do() actions",
+			bounds.Dx(), bounds.Dy())
 	}
 
 	result, err := capture.OptimizeImageWithFormat(img, format, 0)

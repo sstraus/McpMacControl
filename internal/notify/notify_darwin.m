@@ -136,12 +136,12 @@ void showBalloon(const char* text) {
             NSScreen *screen = [NSScreen mainScreen];
             CGFloat screenWidth = screen.frame.size.width;
             CGFloat screenTop = NSMaxY(screen.visibleFrame);
-            CGFloat bw = 320;
-            CGFloat bh = 32;
+            CGFloat bw = 420;
+            CGFloat bh = 40;
 
             NSRect frame = NSMakeRect(
-                screenWidth - bw - 8,   // right-aligned with margin
-                screenTop - bh - 4,     // just below menu bar
+                (screenWidth - bw) / 2,   // centered horizontally
+                screenTop - bh - 8,       // just below menu bar
                 bw, bh
             );
 
@@ -153,7 +153,7 @@ void showBalloon(const char* text) {
 
             [balloonWindow setLevel:NSStatusWindowLevel + 1];
             [balloonWindow setOpaque:NO];
-            [balloonWindow setBackgroundColor:[NSColor colorWithWhite:0.12 alpha:0.92]];
+            [balloonWindow setBackgroundColor:[NSColor colorWithWhite:0.1 alpha:0.95]];
             [balloonWindow setIgnoresMouseEvents:YES];
             [balloonWindow setHasShadow:YES];
             [balloonWindow setCollectionBehavior:
@@ -161,17 +161,20 @@ void showBalloon(const char* text) {
                 NSWindowCollectionBehaviorStationary];
 
             [balloonWindow.contentView setWantsLayer:YES];
-            balloonWindow.contentView.layer.cornerRadius = 8.0;
+            balloonWindow.contentView.layer.cornerRadius = 10.0;
             balloonWindow.contentView.layer.masksToBounds = YES;
+            balloonWindow.contentView.layer.borderColor = [[NSColor colorWithRed:0.3 green:0.6 blue:1.0 alpha:0.6] CGColor];
+            balloonWindow.contentView.layer.borderWidth = 1.5;
 
-            balloonLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(10, 4, bw - 20, 24)];
+            balloonLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(12, 6, bw - 24, 28)];
             [balloonLabel setBezeled:NO];
             [balloonLabel setDrawsBackground:NO];
             [balloonLabel setEditable:NO];
             [balloonLabel setSelectable:NO];
-            [balloonLabel setTextColor:[NSColor whiteColor]];
-            [balloonLabel setFont:[NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightMedium]];
+            [balloonLabel setTextColor:[NSColor colorWithRed:0.85 green:0.9 blue:1.0 alpha:1.0]];
+            [balloonLabel setFont:[NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightMedium]];
             [balloonLabel setLineBreakMode:NSLineBreakByTruncatingTail];
+            [balloonLabel setAlignment:NSTextAlignmentCenter];
             [balloonWindow.contentView addSubview:balloonLabel];
         }
 
