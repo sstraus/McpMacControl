@@ -77,7 +77,7 @@ func allTools() []toolDef {
 		},
 		{
 			mcp.NewTool("do",
-				mcp.WithDescription("Execute actions: click, type, key, scroll, wait. Call help() first."),
+				mcp.WithDescription("Execute actions: click, type, key, scroll, wait, screenshot. Call help() first."),
 				mcp.WithArray("actions",
 					mcp.Required(),
 					mcp.Description("Array of actions to execute in sequence"),

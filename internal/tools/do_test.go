@@ -734,6 +734,47 @@ func TestValidActionTypes_IncludesNewActions(t *testing.T) {
 	}
 }
 
+// --- screenshot validation tests ---
+
+func TestValidateAction_ScreenshotValid(t *testing.T) {
+	tests := []struct {
+		name   string
+		action Action
+	}{
+		{"with app", Action{Type: "screenshot", App: "Safari"}},
+		{"without app (full screen)", Action{Type: "screenshot"}},
+		{"with format webp", Action{Type: "screenshot", App: "Safari", Format: "webp"}},
+		{"with format png", Action{Type: "screenshot", App: "Safari", Format: "png"}},
+		{"format case insensitive", Action{Type: "screenshot", Format: "PNG"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAction(0, tt.action)
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateAction_ScreenshotInvalidFormat(t *testing.T) {
+	action := Action{Type: "screenshot", App: "Safari", Format: "jpeg"}
+	err := validateAction(0, action)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `Invalid screenshot format: "jpeg"`)
+	assert.Contains(t, err.Error(), "Valid formats:")
+}
+
+func TestValidActionTypes_IncludesScreenshot(t *testing.T) {
+	found := false
+	for _, v := range ValidActionTypes {
+		if v == "screenshot" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "ValidActionTypes should include screenshot")
+}
+
 // --- StringOrArray UnmarshalJSON tests ---
 
 func TestStringOrArray_UnmarshalString(t *testing.T) {
@@ -799,6 +840,48 @@ func TestFormatResults_SingleError(t *testing.T) {
 	text := out.Content[0].(mcp.TextContent).Text
 	assert.Contains(t, text, "key tap failed")
 	assert.Contains(t, text, "stopped on first error")
+}
+
+func TestFormatResults_WithImages(t *testing.T) {
+	results := []ActionResult{
+		{Index: 0, Type: "click", Success: true, Message: "click at (100,50) in Safari"},
+		{Index: 1, Type: "screenshot", Success: true, Message: "Safari (800x600)", ImageData: "aW1hZ2VkYXRh", MIMEType: "image/webp"},
+		{Index: 2, Type: "click", Success: true, Message: "click at (200,100) in Safari"},
+	}
+	out := formatResults(results)
+
+	// Should have 4 content items: text, text, image, text
+	require.Len(t, out.Content, 4, "expected 4 content items (3 text + 1 image)")
+
+	// Verify text items
+	text0 := out.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text0, "[0] click:")
+
+	text1 := out.Content[1].(mcp.TextContent).Text
+	assert.Contains(t, text1, "[1] screenshot:")
+
+	// Verify image item follows its text
+	imgContent, ok := out.Content[2].(mcp.ImageContent)
+	assert.True(t, ok, "content[2] should be ImageContent")
+	assert.Equal(t, "aW1hZ2VkYXRh", imgContent.Data)
+	assert.Equal(t, "image/webp", imgContent.MIMEType)
+
+	text3 := out.Content[3].(mcp.TextContent).Text
+	assert.Contains(t, text3, "[2] click:")
+}
+
+func TestFormatResults_WithImages_Error(t *testing.T) {
+	results := []ActionResult{
+		{Index: 0, Type: "screenshot", Success: true, Message: "Safari (800x600)", ImageData: "aW1hZ2VkYXRh", MIMEType: "image/webp"},
+		{Index: 1, Type: "click", Success: false, Error: "window not found"},
+	}
+	out := formatResults(results)
+
+	// text + image + error text + "stopped" text = 4
+	require.Len(t, out.Content, 4)
+
+	lastText := out.Content[3].(mcp.TextContent).Text
+	assert.Contains(t, lastText, "stopped on first error")
 }
 
 // --- executeWait test ---
@@ -907,6 +990,16 @@ func TestExecuteDrag_NoSuchApp(t *testing.T) {
 	assert.False(t, result.Success)
 	assert.Equal(t, "drag", result.Type)
 	assert.Contains(t, result.Error, "list_windows()")
+}
+
+// --- executeScreenshot tests ---
+
+func TestExecuteScreenshot_NoSuchApp(t *testing.T) {
+	skipWithoutScreenRecording(t)
+	result := executeScreenshot(0, Action{Type: "screenshot", App: "NonExistentApp12345"})
+	assert.False(t, result.Success)
+	assert.Equal(t, "screenshot", result.Type)
+	assert.Contains(t, result.Error, "capture failed")
 }
 
 // --- executeType test (no permissions needed for the function itself) ---

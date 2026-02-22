@@ -14,7 +14,7 @@ TOOLS:
 • list_windows   → Find windows by app name
 • capture_window → Screenshot + coordinates for clicking
 • capture_screen → Full screen screenshot
-• do             → Execute actions (click, type, paste, key, drag, scroll, wait, focus, etc.)
+• do             → Execute actions (click, type, paste, key, drag, scroll, wait, screenshot, focus, etc.)
 • shell          → PTY shell sessions with terminal emulation (spawn, send_input, get_snapshot, resize, close, list)
 • alert          → Visual alert overlay (red flash = needs attention, green = done)
 • processes       → List running processes with filtering for debugging
@@ -87,6 +87,11 @@ UTILITY ACTIONS:
 ┌─────────────────────────────────────────────────────────────┐
 │ wait - Pause between actions                                │
 │   {type:"wait", ms:500}  → Wait 500 milliseconds           │
+├─────────────────────────────────────────────────────────────┤
+│ screenshot - Capture window or screen inline                │
+│   {type:"screenshot", app:"Safari"}     → Window capture    │
+│   {type:"screenshot"}                   → Full screen       │
+│   Optional: format:"webp"|"png"                             │
 └─────────────────────────────────────────────────────────────┘
 
 WINDOW ACTIONS:
@@ -151,6 +156,16 @@ const helpExamples = `EXAMPLES
      {"type": "click", "app": "Safari", "x": 100, "y": 50},
      {"type": "wait", "ms": 1000},
      {"type": "type", "text": "delayed typing"}
+   ]})
+
+8. CLICK + SCREENSHOT (visual checkpoint):
+   do({"actions": [
+     {"type": "click", "app": "Safari", "x": 100, "y": 50},
+     {"type": "wait", "ms": 1000},
+     {"type": "screenshot", "app": "Safari"},
+     {"type": "click", "app": "Safari", "x": 200, "y": 100},
+     {"type": "wait", "ms": 1000},
+     {"type": "screenshot", "app": "Safari"}
    ]})`
 
 const helpCapture = `CAPTURE TOOLS
@@ -533,6 +548,36 @@ Example:
 
 Warning: This will close the window. Unsaved work may be lost.`,
 
+	"screenshot": `SCREENSHOT ACTION
+
+Capture a window or full screen inline within a do() batch.
+Returns the image as part of the batch results.
+
+Format:
+  {"type": "screenshot", "app": "Safari"}
+  {"type": "screenshot"}  ← full screen (display 0)
+
+Optional:
+  • app: Application name — captures that window. If omitted, captures full screen.
+  • format: "webp" (default) or "png"
+
+Examples:
+  {"type": "screenshot", "app": "Safari"}
+  {"type": "screenshot", "app": "Finder", "format": "png"}
+  {"type": "screenshot"}
+
+Use for visual checkpoints within multi-step automation:
+  do({"actions": [
+    {"type": "click", "app": "Safari", "x": 100, "y": 50},
+    {"type": "wait", "ms": 1000},
+    {"type": "screenshot", "app": "Safari"},
+    {"type": "click", "app": "Safari", "x": 200, "y": 100},
+    {"type": "screenshot", "app": "Safari"}
+  ]})
+
+Note: Requires Screen Recording permission. The full capture_window tool
+offers additional options (region capture, window_title matching).`,
+
 	"resize": `RESIZE ACTION
 
 Change the size of a window.
@@ -593,6 +638,7 @@ Action-specific help:
   help("key")         → Key action
   help("scroll")      → Scroll action
   help("wait")        → Wait action
+  help("screenshot")  → Screenshot in batch
   help("focus")       → Focus window
   help("minimize")    → Minimize window
   help("restore")     → Restore window

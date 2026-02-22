@@ -20,6 +20,14 @@ func skipWithoutAccessibility(t *testing.T) {
 	}
 }
 
+// skipWithoutScreenRecording skips the test if screen recording permission
+// is not granted (e.g., CI or unprivileged test runner).
+func skipWithoutScreenRecording(t *testing.T) {
+	t.Helper()
+	if !permissions.HasScreenRecordingPermission() {
+		t.Skip("Screen Recording permission not granted, skipping")
+	}
+}
 
 // mockRequest creates a mock MCP call tool request
 func mockRequest(args map[string]any) mcp.CallToolRequest {
