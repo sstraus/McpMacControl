@@ -77,7 +77,7 @@ func allTools() []toolDef {
 		},
 		{
 			mcp.NewTool("do",
-				mcp.WithDescription("Execute actions: click, type, key, scroll, wait, screenshot, focus, minimize, restore, close, resize, drag, paste, clipboard, move. ALWAYS batch into one call. Use screenshot action instead of capture_window. Call help() first."),
+				mcp.WithDescription("Execute actions: click, type, key, scroll, wait, screenshot, focus, minimize, restore, close, resize, drag, paste, clipboard, move. ALWAYS batch into one call. Use screenshot action instead of capture_window. NEVER use osascript — use do(focus) to activate apps, list_windows/processes to find names. Call help() first."),
 				mcp.WithArray("actions",
 					mcp.Required(),
 					mcp.Description("Array of action objects"),

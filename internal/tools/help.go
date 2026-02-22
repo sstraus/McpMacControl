@@ -9,6 +9,9 @@ import (
 
 const helpOverview = `macOS control via MCP — mouse, keyboard, screenshots, windows, shell, processes
 
+NEVER use osascript or AppleScript. These tools replace it entirely.
+Use list_windows() or processes() to discover correct app names first.
+
 WORKFLOW:
 1. list_windows("Safari") or capture_window("Safari") to find/see window
 2. do([{type:"click",app:"Safari",x:100,y:50}]) — target element CENTER
@@ -141,7 +144,7 @@ Pause between actions. Use for UI updates, page loads.`,
 Optional: format:"webp"|"png"
 Use for visual checkpoints within do() batches.`,
 
-	"focus":    `{type:"focus", app:"App"} — bring window to front`,
+	"focus":    `{type:"focus", app:"App"} — activate app and bring window to front (replaces osascript activate)`,
 	"minimize": `{type:"minimize", app:"App"} — minimize to dock`,
 	"restore":  `{type:"restore", app:"App"} — restore from dock`,
 	"close":    `{type:"close", app:"App"} — close window`,
