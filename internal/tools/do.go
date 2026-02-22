@@ -181,6 +181,8 @@ func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 
 	// Check Accessibility permission only when the batch includes actions that need it.
 	// Screenshot-only batches only need Screen Recording (checked lazily in executeScreenshot).
+	// Use HasAccessibilityPermission() instead of EnsureAllPermissions() to avoid
+	// triggering a 10-second blocking Screen Recording request via dispatch_semaphore_wait.
 	needsAccessibility := false
 	for _, action := range actions {
 		if strings.ToLower(action.Type) != "screenshot" && strings.ToLower(action.Type) != "wait" {
@@ -188,11 +190,8 @@ func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResu
 			break
 		}
 	}
-	if needsAccessibility {
-		perms := permissions.EnsureAllPermissions()
-		if !perms.Accessibility {
-			return mcp.NewToolResultError("Accessibility permission required. Grant access in System Settings > Privacy & Security > Accessibility"), nil
-		}
+	if needsAccessibility && !permissions.HasAccessibilityPermission() {
+		return mcp.NewToolResultError("Accessibility permission required. Grant access in System Settings > Privacy & Security > Accessibility"), nil
 	}
 
 	// Execute actions
@@ -1079,9 +1078,10 @@ func executeResize(index int, action Action) ActionResult {
 }
 
 func executeScreenshot(index int, action Action) ActionResult {
-	// Check Screen Recording permission lazily — only screenshot needs it
-	perms := permissions.EnsureAllPermissions()
-	if !perms.ScreenRecording {
+	// Check Screen Recording permission lazily — only screenshot needs it.
+	// Use HasScreenRecordingPermission() to avoid the 10-second blocking
+	// RequestScreenRecordingPermission() call in EnsureAllPermissions().
+	if !permissions.HasScreenRecordingPermission() {
 		return ActionResult{
 			Index:   index,
 			Type:    "screenshot",

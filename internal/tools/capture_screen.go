@@ -18,9 +18,10 @@ func HandleCaptureScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 	formatStr := request.GetString("format", "webp")
 	quality := request.GetInt("quality", 0)
 
-	// Check permission before capturing
-	perms := permissions.EnsureAllPermissions()
-	if !perms.ScreenRecording {
+	// Check Screen Recording permission before capturing.
+	// Use HasScreenRecordingPermission() to avoid the 10-second blocking
+	// RequestScreenRecordingPermission() call in EnsureAllPermissions().
+	if !permissions.HasScreenRecordingPermission() {
 		return mcp.NewToolResultError("Screen Recording permission required. Grant access in System Settings > Privacy & Security > Screen Recording"), nil
 	}
 

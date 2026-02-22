@@ -15,9 +15,10 @@ import (
 func HandleListWindows(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	appFilter := request.GetString("app_filter", "")
 
-	// Check permission before listing windows
-	perms := permissions.EnsureAllPermissions()
-	if !perms.ScreenRecording {
+	// Check Screen Recording permission before listing windows.
+	// Use HasScreenRecordingPermission() to avoid the 10-second blocking
+	// RequestScreenRecordingPermission() call in EnsureAllPermissions().
+	if !permissions.HasScreenRecordingPermission() {
 		return mcp.NewToolResultError("Screen Recording permission required. Grant access in System Settings > Privacy & Security > Screen Recording"), nil
 	}
 
