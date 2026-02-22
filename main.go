@@ -225,9 +225,14 @@ func runMCPServer(listener net.Listener) {
 		statusItem.SetTitle("Status: Running")
 	}
 
+	debug := os.Getenv("MCPMACCONTROL_DEBUG") == "1"
+
 	hooks := &server.Hooks{}
 	if statusItem != nil {
 		hooks.AddBeforeCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest) {
+			if debug {
+				log.Printf("[DEBUG] BeforeCallTool tool=%s start", msg.Params.Name)
+			}
 			if isCaptureCall(msg.Params.Name) {
 				// Hide systray icon so it doesn't appear in screenshots
 				systray.SetTemplateIcon(transparentIconData, transparentIconData)
@@ -235,12 +240,21 @@ func runMCPServer(listener net.Listener) {
 			} else {
 				notify.ShowBalloon(describeTool(msg))
 			}
+			if debug {
+				log.Printf("[DEBUG] BeforeCallTool tool=%s done", msg.Params.Name)
+			}
 		})
 		hooks.AddAfterCallTool(func(_ context.Context, _ any, msg *mcp.CallToolRequest, _ *mcp.CallToolResult) {
+			if debug {
+				log.Printf("[DEBUG] AfterCallTool tool=%s start", msg.Params.Name)
+			}
 			if isCaptureCall(msg.Params.Name) {
 				systray.SetTemplateIcon(iconData, iconData)
 			}
 			notify.HideBalloon()
+			if debug {
+				log.Printf("[DEBUG] AfterCallTool tool=%s done", msg.Params.Name)
+			}
 		})
 	}
 

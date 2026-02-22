@@ -83,11 +83,18 @@ func (p *lazyProxy) callTool(ctx context.Context, req mcp.CallToolRequest) (*mcp
 // If the backend connection is dead (transport error), it resets and retries once.
 // Each call has a timeout (default 30s) to prevent indefinite hangs.
 func (p *lazyProxy) handleToolCall(ctx context.Context, req mcp.CallToolRequest) (result *mcp.CallToolResult, _ error) {
-	if os.Getenv("MCPMACCONTROL_DEBUG") == "1" {
+	debug := os.Getenv("MCPMACCONTROL_DEBUG") == "1"
+	var start time.Time
+	if debug {
+		start = time.Now()
+		log.Printf("[DEBUG] tool=%s call started", req.Params.Name)
 		defer func() {
+			elapsed := time.Since(start)
 			if result != nil && result.IsError {
 				j, _ := json.Marshal(result)
-				log.Printf("[DEBUG] tool=%s returning error result: %s", req.Params.Name, j)
+				log.Printf("[DEBUG] tool=%s finished in %s (error): %s", req.Params.Name, elapsed, j)
+			} else {
+				log.Printf("[DEBUG] tool=%s finished in %s", req.Params.Name, elapsed)
 			}
 		}()
 	}

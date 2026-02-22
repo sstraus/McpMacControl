@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
+	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -144,6 +146,15 @@ var ValidButtons = []string{"left", "right", "middle"}
 // HandleDo handles the unified "do" tool call.
 // Executes one or more actions in sequence.
 func HandleDo(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	debug := os.Getenv("MCPMACCONTROL_DEBUG") == "1"
+	if debug {
+		start := time.Now()
+		log.Printf("[DEBUG] HandleDo start")
+		defer func() {
+			log.Printf("[DEBUG] HandleDo finished in %s", time.Since(start))
+		}()
+	}
+
 	// Validate parameters first so the user gets helpful errors
 	args := request.GetArguments()
 	actionsRaw := args["actions"]

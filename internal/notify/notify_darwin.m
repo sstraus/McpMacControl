@@ -125,8 +125,12 @@ static NSTimer *balloonTimer = nil;
 // primary display. Auto-dismisses after 3 seconds. Calling again resets the
 // timer and updates the text.
 void showBalloon(const char* text) {
+    // Copy the string before dispatch_async — the caller frees the original
+    // immediately after this function returns (Go defer C.free).
+    char *copy = strdup(text);
     dispatch_async(dispatch_get_main_queue(), ^{
-        NSString *str = [NSString stringWithUTF8String:text];
+        NSString *str = [NSString stringWithUTF8String:copy];
+        free(copy);
 
         if (!balloonWindow) {
             NSScreen *screen = [NSScreen mainScreen];
