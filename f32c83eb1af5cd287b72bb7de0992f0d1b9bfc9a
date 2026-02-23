@@ -1,0 +1,27 @@
+internal/tools/do.go
+  8decb640bcd0a167 602-606,617-620,640-657
+internal/tools/do_test.go
+  8decb640bcd0a167 820-861,895
+internal/tools/help.go
+  8decb640bcd0a167 37-42,45,63,66,117-118,120-122,125,127,129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.4",
+  "base_commit_sha": "f32c83eb1af5cd287b72bb7de0992f0d1b9bfc9a",
+  "prompts": {
+    "8decb640bcd0a167": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7ab8a373-15dd-4d17-a95f-01f56cd6e63e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 92,
+      "total_deletions": 30,
+      "accepted_lines": 88,
+      "overriden_lines": 0
+    }
+  }
+}
