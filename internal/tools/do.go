@@ -599,10 +599,11 @@ Examples:
 	return nil
 }
 
-// validateAppContext checks that coordinate-based actions have an app context,
-// either via an explicit "app" field or a preceding "focus" action in the batch.
-// This prevents the common mistake of using window-relative coordinates from a
-// screenshot as absolute screen coordinates.
+// validateAppContext checks that actions have an app context, either via an
+// explicit "app" field or a preceding "focus" action in the batch. This
+// prevents coordinate-based actions from using window-relative coordinates as
+// absolute screen coordinates, and prevents keyboard/paste actions from
+// targeting the wrong application when focus shifts between do() calls.
 func validateAppContext(actions []Action) error {
 	var focusApp string
 	for i, action := range actions {
@@ -613,12 +614,12 @@ func validateAppContext(actions []Action) error {
 			continue
 		}
 
-		// Only check actions that use coordinates for window-relative positioning
+		if action.App != "" || focusApp != "" {
+			continue // has app context
+		}
+
 		switch actionType {
 		case "click", "move", "scroll", "drag":
-			if action.App != "" || focusApp != "" {
-				continue // has app context
-			}
 			return fmt.Errorf(`[Action %d] %s action has no app context.
 
 Coordinates (x=%d, y=%d) will be treated as absolute screen coordinates,
@@ -636,6 +637,24 @@ Fix: add "app" to the action, or add a focus action earlier in the batch:
 
 The "app" field is matched against window owner names from list_windows().`,
 				i, actionType, action.X, action.Y, actionType, action.X, action.Y, actionType, action.X, action.Y)
+
+		case "key", "type", "paste":
+			return fmt.Errorf(`[Action %d] %s action has no app context.
+
+Without an app target, input goes to whichever application happens to be
+frontmost — which may have changed since the last do() call.
+
+Fix: add "app" to the action, or add a focus action earlier in the batch:
+
+  Option A — app on each action:
+    {"type": "%s", "app": "AppName", ...}
+
+  Option B — focus once, then actions inherit it:
+    {"type": "focus", "app": "AppName"},
+    {"type": "%s", ...}
+
+The "app" field is matched against window owner names from list_windows().`,
+				i, actionType, actionType, actionType)
 		}
 	}
 	return nil

@@ -814,9 +814,51 @@ func TestValidateAppContext_MoveWithoutAppOrFocus(t *testing.T) {
 }
 
 func TestValidateAppContext_TypeWithoutApp(t *testing.T) {
-	// type/key/paste don't need app context — they send to focused window
 	actions := []Action{
 		{Type: "type", Text: "hello"},
+	}
+	err := validateAppContext(actions)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+}
+
+func TestValidateAppContext_KeyWithoutApp(t *testing.T) {
+	actions := []Action{
+		{Type: "key", Key: "enter"},
+	}
+	err := validateAppContext(actions)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+}
+
+func TestValidateAppContext_PasteWithoutApp(t *testing.T) {
+	actions := []Action{
+		{Type: "paste", Text: "hello"},
+	}
+	err := validateAppContext(actions)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no app context")
+}
+
+func TestValidateAppContext_KeyWithApp(t *testing.T) {
+	actions := []Action{
+		{Type: "key", Key: "enter", App: "Terminal"},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_TypeWithPrecedingFocus(t *testing.T) {
+	actions := []Action{
+		{Type: "focus", App: "Safari"},
+		{Type: "type", Text: "hello"},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_PasteWithPrecedingFocus(t *testing.T) {
+	actions := []Action{
+		{Type: "focus", App: "Terminal"},
+		{Type: "paste", Text: "/tmp/file"},
 	}
 	assert.NoError(t, validateAppContext(actions))
 }
@@ -850,7 +892,7 @@ func TestValidateAppContext_ScrollWithoutApp(t *testing.T) {
 }
 
 func TestValidateAppContext_MixedBatch(t *testing.T) {
-	// focus + type + key don't need app, screenshot/click do but focus provides it
+	// focus provides app context for all subsequent actions in the batch
 	actions := []Action{
 		{Type: "focus", App: "Terminal"},
 		{Type: "click", X: 100, Y: 200},

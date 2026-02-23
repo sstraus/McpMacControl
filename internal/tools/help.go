@@ -34,15 +34,15 @@ MOUSE: click, move, drag, scroll
   {type:"drag", app:"App", x:N, y:N, to_x:N, to_y:N}
   {type:"scroll", app:"App", x:N, y:N, delta_y:N}  — negative=up, positive=down
 
-KEYBOARD: type, paste, clipboard, key
-  {type:"type", text:"hello"}
-  {type:"paste", text:"/path"}          — uses clipboard+⌘V, for autocomplete fields
-  {type:"clipboard"}                    — read clipboard
-  {type:"key", key:"enter"}
-  {type:"key", key:"v", modifiers:["cmd"]}
+KEYBOARD: type, paste, clipboard, key  (app REQUIRED — prevents input to wrong window)
+  {type:"type", app:"App", text:"hello"}
+  {type:"paste", app:"App", text:"/path"}  — uses clipboard+⌘V, for autocomplete fields
+  {type:"clipboard"}                       — read clipboard (no app needed)
+  {type:"key", app:"App", key:"enter"}
+  {type:"key", app:"App", key:"v", modifiers:["cmd"]}
   Keys: a-z, 0-9, tab, enter, escape, delete, space, backspace, arrows, f1-f12
   Modifiers: cmd, shift, alt, ctrl
-  Shorthand: {type:"key", key:"cmd+shift+g"}
+  Shorthand: {type:"key", app:"App", key:"cmd+shift+g"}
 
 UTILITY: wait, screenshot
   {type:"wait", ms:500}
@@ -60,10 +60,10 @@ WINDOW: focus, minimize, restore, close, resize
 const helpExamples = `EXAMPLES — always batch into ONE do() call
 
 Type + submit:
-  do([{type:"click",app:"Safari",x:300,y:100},{type:"type",text:"user@ex.com"},{type:"key",key:"tab"},{type:"type",text:"pass"},{type:"key",key:"enter"}])
+  do([{type:"click",app:"Safari",x:300,y:100},{type:"type",app:"Safari",text:"user@ex.com"},{type:"key",app:"Safari",key:"tab"},{type:"type",app:"Safari",text:"pass"},{type:"key",app:"Safari",key:"enter"}])
 
 Copy-paste between apps:
-  do([{type:"key",key:"a",modifiers:["cmd"]},{type:"key",key:"c",modifiers:["cmd"]},{type:"click",app:"Notes",x:100,y:100},{type:"key",key:"v",modifiers:["cmd"]}])
+  do([{type:"key",app:"Safari",key:"a",modifiers:["cmd"]},{type:"key",app:"Safari",key:"c",modifiers:["cmd"]},{type:"click",app:"Notes",x:100,y:100},{type:"key",app:"Notes",key:"v",modifiers:["cmd"]}])
 
 Click + verify (visual checkpoint):
   do([{type:"click",app:"Safari",x:100,y:50},{type:"wait",ms:1000},{type:"screenshot",app:"Safari"},{type:"click",app:"Safari",x:200,y:100},{type:"wait",ms:1000},{type:"screenshot",app:"Safari"}])
@@ -114,18 +114,19 @@ Always target element CENTER, not edge.`,
 	"move": `{type:"move", app:"App", x:N, y:N}
 {type:"move", x:N, y:N}  — absolute screen coords`,
 
-	"type": `{type:"type", text:"Hello"}
-Types char by char into focused field.`,
+	"type": `{type:"type", app:"App", text:"Hello"}
+Types char by char. App required — ensures target window has focus.`,
 
-	"key": `{type:"key", key:"enter"}
-{type:"key", key:"v", modifiers:["cmd"]}
-{type:"key", key:"cmd+shift+g"}  — shorthand
+	"key": `{type:"key", app:"App", key:"enter"}
+{type:"key", app:"App", key:"v", modifiers:["cmd"]}
+{type:"key", app:"App", key:"cmd+shift+g"}  — shorthand
 Keys: a-z, 0-9, tab, enter, escape, delete, space, backspace, arrows, f1-f12
-Modifiers: cmd, shift, alt, ctrl`,
+Modifiers: cmd, shift, alt, ctrl
+App required — ensures target window has focus.`,
 
-	"paste": `{type:"paste", text:"/path/to/file"}
+	"paste": `{type:"paste", app:"App", text:"/path/to/file"}
 Pastes via clipboard+⌘V. Use instead of type when field has autocomplete.
-Overwrites clipboard.`,
+App required — ensures target window has focus. Overwrites clipboard.`,
 
 	"clipboard": `{type:"clipboard"}
 Returns current clipboard text.`,
