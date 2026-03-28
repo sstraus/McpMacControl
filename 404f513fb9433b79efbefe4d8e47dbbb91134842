@@ -1,0 +1,23 @@
+.gitignore
+  0870b4cd709ce498 34,36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "404f513fb9433b79efbefe4d8e47dbbb91134842",
+  "prompts": {
+    "0870b4cd709ce498": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a27da300-5e49-4187-a0a9-2cf8cd2cadb7",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
