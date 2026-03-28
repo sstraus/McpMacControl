@@ -220,7 +220,7 @@ Run without menu bar (for CI/SSH):
 ## Image Optimization
 
 Screenshots are optimized for AI vision:
-- WebP lossy format (quality 15 — tested on complex UIs, fully readable at ~3x smaller than q75)
+- WebP lossy format (default quality 25, tunable 1-100 via `quality` parameter; use 50+ for small glyphs/icons)
 - Scaled to window point dimensions (coordinates match clicks)
 - Use **region capture** to further reduce size and tokens
 

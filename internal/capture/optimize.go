@@ -82,10 +82,9 @@ func OptimizeImageWithFormat(img image.Image, format ImageFormat, quality int) (
 }
 
 // DefaultWebPQuality is the default lossy encoding quality (0-100).
-// 15 is sufficient for AI vision on UI screenshots while keeping file size small.
-// Tested on complex UIs (Slack, terminals): text, icons, and UI elements remain
-// perfectly readable at this level, with ~3x size reduction vs quality 75.
-const DefaultWebPQuality float32 = 15
+// 25 preserves fine UI details (glyphs, small icons, keyboard shortcuts)
+// while maintaining ~3x size reduction vs PNG. Use 50+ for dense UIs.
+const DefaultWebPQuality float32 = 25
 
 // encodeWebP encodes image as lossy WebP at the given quality level.
 func encodeWebP(img image.Image, quality float32) ([]byte, error) {

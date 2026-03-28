@@ -48,7 +48,7 @@ UTILITY: wait, screenshot
   {type:"wait", ms:500}
   {type:"screenshot", app:"Safari"}     — inline window capture
   {type:"screenshot"}                   — inline full screen
-  Optional: format:"webp"|"png"
+  Optional: format:"webp"|"png", quality:1-100 (default 25; use 50+ for small glyphs/icons)
 
 WINDOW: focus, minimize, restore, close, resize
   {type:"focus", app:"App"}
@@ -142,7 +142,7 @@ Pause between actions. Use for UI updates, page loads.`,
 
 	"screenshot": `{type:"screenshot", app:"Safari"} — window capture
 {type:"screenshot"} — full screen
-Optional: format:"webp"|"png"
+Optional: format:"webp"|"png", quality:1-100 (default 25; use 50+ for small glyphs/icons)
 Use for visual checkpoints within do() batches.`,
 
 	"focus":    `{type:"focus", app:"App"} — activate app and bring window to front (replaces osascript activate)`,

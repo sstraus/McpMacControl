@@ -31,7 +31,9 @@ go.work
 # Test screenshots
 *.png
 !testdata/*.png
+# mdkb:index
 stories
+# mdkb:index
 plans
 .claude
 CLAUDE.md

@@ -73,7 +73,8 @@ type Action struct {
 	ToY int `json:"to_y,omitempty"` // Drag destination Y
 
 	// Screenshot action
-	Format string `json:"format,omitempty"` // Image format: "webp" (default) or "png"
+	Format  string `json:"format,omitempty"`  // Image format: "webp" (default) or "png"
+	Quality int    `json:"quality,omitempty"` // WebP quality 1-100 (default 25; use 50+ for small glyphs/icons)
 }
 
 // normalizeAction converts aliases to canonical field names.
@@ -620,44 +621,46 @@ func validateAppContext(actions []Action) error {
 
 		switch actionType {
 		case "click", "move", "scroll", "drag":
-			return fmt.Errorf(`[Action %d] %s action has no app context.
-
-Coordinates (x=%d, y=%d) will be treated as absolute screen coordinates,
-which is almost never what you want. Screenshot coordinates are relative
-to the window — you must specify which window.
-
-Fix: add "app" to the action, or add a focus action earlier in the batch:
-
-  Option A — app on each action:
-    {"type": "%s", "app": "AppName", "x": %d, "y": %d}
-
-  Option B — focus once, then actions inherit it:
-    {"type": "focus", "app": "AppName"},
-    {"type": "%s", "x": %d, "y": %d}
-
-The "app" field is matched against window owner names from list_windows().`,
-				i, actionType, action.X, action.Y, actionType, action.X, action.Y, actionType, action.X, action.Y)
+			return noAppContextError(i, actionType,
+				fmt.Sprintf("Coordinates (x=%d, y=%d) will be treated as absolute screen coordinates,\nwhich is almost never what you want. Screenshot coordinates are relative\nto the window — you must specify which window.", action.X, action.Y),
+				fmt.Sprintf(`{"type": "%s", "app": "AppName", "x": %d, "y": %d}`, actionType, action.X, action.Y),
+				fmt.Sprintf(`{"type": "%s", "x": %d, "y": %d}`, actionType, action.X, action.Y))
 
 		case "key", "type", "paste":
-			return fmt.Errorf(`[Action %d] %s action has no app context.
+			return noAppContextError(i, actionType,
+				"Without an app target, input goes to whichever application happens to be\nfrontmost — which may have changed since the last do() call.",
+				fmt.Sprintf(`{"type": "%s", "app": "AppName", ...}`, actionType),
+				fmt.Sprintf(`{"type": "%s", ...}`, actionType))
 
-Without an app target, input goes to whichever application happens to be
-frontmost — which may have changed since the last do() call.
+		case "wait", "screenshot", "clipboard":
+			// These actions don't target a specific window
 
-Fix: add "app" to the action, or add a focus action earlier in the batch:
-
-  Option A — app on each action:
-    {"type": "%s", "app": "AppName", ...}
-
-  Option B — focus once, then actions inherit it:
-    {"type": "focus", "app": "AppName"},
-    {"type": "%s", ...}
-
-The "app" field is matched against window owner names from list_windows().`,
-				i, actionType, actionType, actionType)
+		case "focus", "minimize", "restore", "close", "resize":
+			// These validate app in their own handlers
 		}
 	}
 	return nil
+}
+
+// noAppContextError builds a consistent error for actions missing app context.
+// reason explains why app context matters for this action type.
+// optionA/optionB show example JSON with/without explicit app field.
+func noAppContextError(index int, actionType, reason, optionA, optionB string) error {
+	return fmt.Errorf(`[Action %d] %s action has no app context.
+
+%s
+
+Fix: add "app" to the action, or add a focus action earlier in the batch:
+
+  Option A — app on each action:
+    %s
+
+  Option B — focus once, then actions inherit it:
+    {"type": "focus", "app": "AppName"},
+    %s
+
+The "app" field is matched against window owner names from list_windows().`,
+		index, actionType, reason, optionA, optionB)
 }
 
 // Error message formatters
@@ -1265,7 +1268,7 @@ func executeScreenshot(index int, action Action) ActionResult {
 			bounds.Dx(), bounds.Dy())
 	}
 
-	result, err := capture.OptimizeImageWithFormat(img, format, 0)
+	result, err := capture.OptimizeImageWithFormat(img, format, action.Quality)
 	if err != nil {
 		return ActionResult{
 			Index:   index,

@@ -450,21 +450,14 @@ func TestFormatParseError(t *testing.T) {
 	}
 }
 
-// Test that valid action types list is complete
+// Test that ValidActionTypes contains exactly all supported action types
 func TestValidActionTypes(t *testing.T) {
-	expected := []string{"click", "move", "type", "key", "wait", "scroll", "focus", "minimize", "restore", "close", "resize"}
-	for _, e := range expected {
-		found := false
-		for _, v := range ValidActionTypes {
-			if v == e {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("ValidActionTypes missing: %s", e)
-		}
+	expected := []string{
+		"click", "move", "type", "key", "paste", "clipboard",
+		"wait", "scroll", "drag", "focus", "minimize", "restore",
+		"close", "resize", "screenshot",
 	}
+	require.ElementsMatch(t, expected, ValidActionTypes)
 }
 
 // Test that valid keys list includes common keys
@@ -716,23 +709,7 @@ func TestValidateAction_DragValid(t *testing.T) {
 	}
 }
 
-// --- ValidActionTypes includes new actions ---
-
-func TestValidActionTypes_IncludesNewActions(t *testing.T) {
-	newActions := []string{"paste", "clipboard", "drag"}
-	for _, a := range newActions {
-		found := false
-		for _, v := range ValidActionTypes {
-			if v == a {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("ValidActionTypes missing: %s", a)
-		}
-	}
-}
+// --- ValidActionTypes includes new actions (covered by TestValidActionTypes) ---
 
 // --- screenshot validation tests ---
 
@@ -764,16 +741,7 @@ func TestValidateAction_ScreenshotInvalidFormat(t *testing.T) {
 	assert.Contains(t, err.Error(), "Valid formats:")
 }
 
-func TestValidActionTypes_IncludesScreenshot(t *testing.T) {
-	found := false
-	for _, v := range ValidActionTypes {
-		if v == "screenshot" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "ValidActionTypes should include screenshot")
-}
+// TestValidActionTypes_IncludesScreenshot covered by TestValidActionTypes
 
 // --- validateAppContext tests ---
 
@@ -820,6 +788,9 @@ func TestValidateAppContext_TypeWithoutApp(t *testing.T) {
 	err := validateAppContext(actions)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no app context")
+	assert.Contains(t, err.Error(), "frontmost")
+	assert.Contains(t, err.Error(), "Option A")
+	assert.Contains(t, err.Error(), "Option B")
 }
 
 func TestValidateAppContext_KeyWithoutApp(t *testing.T) {
@@ -829,6 +800,9 @@ func TestValidateAppContext_KeyWithoutApp(t *testing.T) {
 	err := validateAppContext(actions)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no app context")
+	assert.Contains(t, err.Error(), "frontmost")
+	assert.Contains(t, err.Error(), "Option A")
+	assert.Contains(t, err.Error(), "Option B")
 }
 
 func TestValidateAppContext_PasteWithoutApp(t *testing.T) {
@@ -838,11 +812,28 @@ func TestValidateAppContext_PasteWithoutApp(t *testing.T) {
 	err := validateAppContext(actions)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no app context")
+	assert.Contains(t, err.Error(), "frontmost")
+	assert.Contains(t, err.Error(), "Option A")
+	assert.Contains(t, err.Error(), "Option B")
 }
 
 func TestValidateAppContext_KeyWithApp(t *testing.T) {
 	actions := []Action{
 		{Type: "key", Key: "enter", App: "Terminal"},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_TypeWithApp(t *testing.T) {
+	actions := []Action{
+		{Type: "type", App: "Terminal", Text: "ls"},
+	}
+	assert.NoError(t, validateAppContext(actions))
+}
+
+func TestValidateAppContext_PasteWithApp(t *testing.T) {
+	actions := []Action{
+		{Type: "paste", App: "Finder", Text: "/tmp/file"},
 	}
 	assert.NoError(t, validateAppContext(actions))
 }
