@@ -6,9 +6,25 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple)](https://github.com/sstraus/mcpmaccontrol)
 
-MCP server for **Mouse, Keyboard, Screenshot, Window & Shell Control** on macOS.
+**Give your AI eyes and hands on your Mac.**
 
-Enables AI to control Mac UI: capture screenshots, move/click mouse, type text, press keyboard shortcuts, scroll/resize/minimize windows, and run interactive shell sessions.
+MCPMacControl is an [MCP server](https://modelcontextprotocol.io/) that turns any AI assistant into an **agentic computer user** — it can see your screen, move the mouse, type on the keyboard, and run shell commands across **any macOS application**, not just the browser.
+
+Works with Claude Code, Cursor, Windsurf, and any MCP-compatible client.
+
+No scripting. No AppleScript. Just tell the AI what you want in plain language and watch it drive your Mac.
+
+### What can your AI do with it?
+
+- **Test your app like a QA engineer** — click through flows, fill forms, verify visual state
+- **Automate legacy software** that has no API — navigate menus, extract data from any window
+- **Debug UI issues** by looking at screenshots and reproducing the problem step by step
+- **Drive native apps** — Xcode, Figma, Finder, Mail, Excel — anything with a window
+- **Run interactive terminal sessions** — full PTY with TUI support (vim, htop, docker logs)
+
+> *"Take a screenshot of Safari, click the search bar, and type anthropic.com"*
+>
+> That's a real prompt. The AI does the rest.
 
 ## Install
 
@@ -27,9 +43,9 @@ make build
 make install
 ```
 
-### Configure Claude Code
+### Configure your MCP client
 
-Add to `~/.claude.json`:
+Add to your MCP client's config (e.g. `~/.claude.json` for Claude Code):
 
 ```json
 {
@@ -41,7 +57,13 @@ Add to `~/.claude.json`:
 }
 ```
 
-Then ask Claude: *"Take a screenshot of Safari and click the search box"*
+Then ask your AI: *"Take a screenshot of Safari and click the search box"*
+
+## Why not Playwright / browser automation?
+
+Browser automation tools only control browsers. MCPMacControl controls **everything on your Mac** — native apps, Electron apps, system dialogs, menu bars, the Dock. If it has pixels on screen, Claude can see it and interact with it.
+
+It also includes full PTY shell sessions, so Claude can run `vim`, `docker`, `ssh`, or any interactive terminal tool — not just headless commands.
 
 ## Why an `.app` bundle?
 
@@ -68,14 +90,12 @@ Grant both in **System Settings > Privacy & Security**. The app registers itself
 
 ## Features
 
-- **Menu bar icon** shows when MCP server is running
-- **Native popover** — drops down from the systray icon showing the calling project path and current operation. Fades out after 5 seconds
-- **Action notifications** — sound + orange border flash before mouse/keyboard automation, so you know when the AI is controlling your Mac. Toggle from the menu bar
-- **App context inheritance** — `focus` propagates to subsequent actions in a batch, so you don't need `app` on every action
-- **Input safety** — `key`, `type`, and `paste` verify the target app is focused before sending input
-- **Single binary** in a signed `.app` bundle
-- **Auto-exit** when Claude disconnects
-- **Region capture** to save tokens
+- **Visual feedback** — menu bar icon, native popover showing current operation, sound + orange border flash before automation
+- **Input safety** — verifies the target app is focused before sending keystrokes, preventing input from reaching the wrong window
+- **App context inheritance** — `focus` propagates to subsequent actions in a batch, so you write `app` once
+- **Signed `.app` bundle** — macOS permissions persist across updates, no Gatekeeper warnings
+- **Region capture** — screenshot only what you need to save tokens
+- **Auto-exit** when the AI client disconnects
 
 ## Tools
 
@@ -97,27 +117,32 @@ The AI calls `help()` to learn the API:
 - `help("shell")` → Shell/PTY documentation
 - `help("examples")` → Usage examples
 
-## Workflow
+## How it works
+
+Claude operates in a see-think-act loop — the same way a human would use a computer:
 
 ```
-1. help()                           → Learn the API
-2. list_windows("Safari")           → Find window
-3. capture_window("Safari")         → Get screenshot + bounds
-4. [AI analyzes image]              → Find button at (400, 50)
-5. do([{type:"click", app:"Safari", x:400, y:50}])
+1. capture_window("Safari")         → Screenshot saved to temp file
+2. [Claude reads the image]         → "I see a search bar at (400, 50)"
+3. do([                             → Click, type, press Enter
+     {type:"click", app:"Safari", x:400, y:50},
+     {type:"type", text:"anthropic.com"},
+     {type:"key", key:"enter"}
+   ])
+4. capture_window("Safari")         → Verify the result
 ```
 
-### Region Capture (saves tokens!)
+Pixel coordinates in the screenshot map directly to `do()` action coordinates — no conversion needed.
 
-Capture only a portion of a window for smaller images:
+### Region capture
+
+Capture a portion of a window to save tokens:
 
 ```
 capture_window("Safari", region_x: 0, region_y: 0, region_width: 400, region_height: 300)
 ```
 
-This captures only the top-left 400x300 area. Click coordinates:
-- `click_x = region_x + x_in_image`
-- `click_y = region_y + y_in_image`
+Click coordinates: `click_x = region_x + x_in_image`, `click_y = region_y + y_in_image`.
 
 ## The `do` Tool
 
