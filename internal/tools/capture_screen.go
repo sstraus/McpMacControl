@@ -39,11 +39,11 @@ func HandleCaptureScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 		format = capture.FormatPNG
 	}
 
-	// Save to temp file instead of returning base64 (avoids token limit issues)
+	// Encode image — inline if small, temp file if large
 	prefix := fmt.Sprintf("screen%d", displayIndex)
-	filePath, err := capture.SaveToFileWithFormat(img, prefix, format, quality)
+	imgContent, err := imageResult(img, prefix, format, quality)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("save failed: %v", err)), nil
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Get dimensions
@@ -51,7 +51,9 @@ func HandleCaptureScreen(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	description := fmt.Sprintf("Screenshot of display %d (%dx%d)\nScreenshot saved to: %s\nUse the Read tool to view it.", displayIndex, width, height, filePath)
+	description := fmt.Sprintf("Screenshot of display %d (%dx%d)", displayIndex, width, height)
+	content := []mcp.Content{mcp.NewTextContent(description)}
+	content = append(content, imgContent...)
 
-	return mcp.NewToolResultText(description), nil
+	return &mcp.CallToolResult{Content: content}, nil
 }

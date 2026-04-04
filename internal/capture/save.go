@@ -76,6 +76,24 @@ func SaveWindowToFile(appName, windowTitle string, hideShadow bool) (string, *Wi
 	return path, info, nil
 }
 
+// SaveBytesToFile writes already-optimized image bytes to a temp file.
+func SaveBytesToFile(data []byte, prefix string, format ImageFormat) (string, error) {
+	ext := ".webp"
+	if format == FormatPNG {
+		ext = ".png"
+	}
+
+	timestamp := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("mcpmaccontrol-%s-%s%s", prefix, timestamp, ext)
+	fpath := filepath.Join(os.TempDir(), filename)
+
+	if err := os.WriteFile(fpath, data, 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+
+	return fpath, nil
+}
+
 // SanitizeFilename removes characters that aren't safe for filenames.
 func SanitizeFilename(name string) string {
 	result := make([]byte, 0, len(name))

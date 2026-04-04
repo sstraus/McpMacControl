@@ -68,11 +68,11 @@ func HandleCaptureWindow(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 		format = capture.FormatPNG
 	}
 
-	// Save to temp file instead of returning base64 (avoids token limit issues)
+	// Encode image — inline if small, temp file if large
 	prefix := capture.SanitizeFilename(winInfo.OwnerName)
-	filePath, err := capture.SaveToFileWithFormat(img, prefix, format, quality)
+	imgContent, err := imageResult(img, prefix, format, quality)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("save failed: %v", err)), nil
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Build bounds info for click targeting
@@ -97,12 +97,10 @@ func HandleCaptureWindow(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 		boundsInfo += "\nPixel coordinates in this image map directly to do() x,y values."
 	}
 
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			mcp.NewTextContent(boundsInfo),
-			mcp.NewTextContent(fmt.Sprintf("Screenshot saved to: %s\nUse the Read tool to view it.", filePath)),
-		},
-	}, nil
+	content := []mcp.Content{mcp.NewTextContent(boundsInfo)}
+	content = append(content, imgContent...)
+
+	return &mcp.CallToolResult{Content: content}, nil
 }
 
 // cropImage extracts a rectangular region from an image.

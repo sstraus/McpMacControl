@@ -962,36 +962,62 @@ func TestFormatResults_SingleError(t *testing.T) {
 	assert.Contains(t, text, "stopped on first error")
 }
 
-func TestFormatResults_WithScreenshot(t *testing.T) {
+func TestFormatResults_WithInlineImage(t *testing.T) {
 	results := []ActionResult{
 		{Index: 0, Type: "click", Success: true, Message: "click at (100,50) in Safari"},
-		{Index: 1, Type: "screenshot", Success: true, Message: "Safari (800x600)\nScreenshot saved to: /tmp/mcpmaccontrol-Safari-20260404-120000.webp\nUse the Read tool to view it."},
+		{Index: 1, Type: "screenshot", Success: true, Message: "Safari (800x600)",
+			Extra: []mcp.Content{mcp.NewImageContent("aW1hZ2VkYXRh", "image/webp")}},
 		{Index: 2, Type: "click", Success: true, Message: "click at (200,100) in Safari"},
 	}
 	out := formatResults(results)
 
-	// All text now — single text content block
-	require.Len(t, out.Content, 1)
+	// Mixed content: 3 text + 1 image = 4
+	require.Len(t, out.Content, 4)
 
-	text := out.Content[0].(mcp.TextContent).Text
-	assert.Contains(t, text, "[0] click:")
-	assert.Contains(t, text, "[1] screenshot:")
-	assert.Contains(t, text, "Screenshot saved to:")
-	assert.Contains(t, text, "[2] click:")
+	text0 := out.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text0, "[0] click:")
+
+	text1 := out.Content[1].(mcp.TextContent).Text
+	assert.Contains(t, text1, "[1] screenshot:")
+
+	imgContent, ok := out.Content[2].(mcp.ImageContent)
+	assert.True(t, ok, "content[2] should be ImageContent")
+	assert.Equal(t, "aW1hZ2VkYXRh", imgContent.Data)
+
+	text3 := out.Content[3].(mcp.TextContent).Text
+	assert.Contains(t, text3, "[2] click:")
 }
 
-func TestFormatResults_WithScreenshot_Error(t *testing.T) {
+func TestFormatResults_WithFileFallback(t *testing.T) {
 	results := []ActionResult{
-		{Index: 0, Type: "screenshot", Success: true, Message: "Safari (800x600)\nScreenshot saved to: /tmp/mcpmaccontrol-Safari-20260404-120000.webp"},
+		{Index: 0, Type: "screenshot", Success: true, Message: "Safari (800x600)",
+			Extra: []mcp.Content{mcp.NewTextContent("Screenshot saved to: /tmp/mcpmaccontrol-Safari.webp\nUse the Read tool to view it.")}},
 		{Index: 1, Type: "click", Success: false, Error: "window not found"},
 	}
 	out := formatResults(results)
 
-	require.Len(t, out.Content, 1)
+	// text + file-path-text + error-text + stopped-text = 4
+	require.Len(t, out.Content, 4)
 
+	text1 := out.Content[1].(mcp.TextContent).Text
+	assert.Contains(t, text1, "Screenshot saved to:")
+
+	lastText := out.Content[3].(mcp.TextContent).Text
+	assert.Contains(t, lastText, "stopped on first error")
+}
+
+func TestFormatResults_NoExtra_SingleTextBlock(t *testing.T) {
+	results := []ActionResult{
+		{Index: 0, Type: "click", Success: true, Message: "click at (100,50) in Safari"},
+		{Index: 1, Type: "type", Success: true, Message: "typed 5 chars"},
+	}
+	out := formatResults(results)
+
+	// No Extra → fast path, single text block
+	require.Len(t, out.Content, 1)
 	text := out.Content[0].(mcp.TextContent).Text
-	assert.Contains(t, text, "Screenshot saved to:")
-	assert.Contains(t, text, "stopped on first error")
+	assert.Contains(t, text, "[0] click:")
+	assert.Contains(t, text, "[1] type:")
 }
 
 // --- executeWait test ---
