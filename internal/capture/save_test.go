@@ -75,9 +75,9 @@ func TestSanitizeFilename(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := sanitizeFilename(tt.input)
+		result := SanitizeFilename(tt.input)
 		if result != tt.expected {
-			t.Errorf("sanitizeFilename(%q) = %q, want %q", tt.input, result, tt.expected)
+			t.Errorf("SanitizeFilename(%q) = %q, want %q", tt.input, result, tt.expected)
 		}
 	}
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"image"
@@ -69,14 +68,12 @@ func HandleCaptureWindow(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 		format = capture.FormatPNG
 	}
 
-	// Optimize image
-	result, err := capture.OptimizeImageWithFormat(img, format, quality)
+	// Save to temp file instead of returning base64 (avoids token limit issues)
+	prefix := capture.SanitizeFilename(winInfo.OwnerName)
+	filePath, err := capture.SaveToFileWithFormat(img, prefix, format, quality)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("optimize failed: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("save failed: %v", err)), nil
 	}
-
-	// Encode to base64
-	imageData := base64.StdEncoding.EncodeToString(result.Data)
 
 	// Build bounds info for click targeting
 	boundsInfo := fmt.Sprintf("Window: %s", winInfo.OwnerName)
@@ -103,7 +100,7 @@ func HandleCaptureWindow(_ context.Context, request mcp.CallToolRequest) (*mcp.C
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.NewTextContent(boundsInfo),
-			mcp.NewImageContent(imageData, result.MIMEType),
+			mcp.NewTextContent(fmt.Sprintf("Screenshot saved to: %s\nUse the Read tool to view it.", filePath)),
 		},
 	}, nil
 }

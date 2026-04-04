@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0
+
+### Changed
+- **Screenshots saved to disk** — `capture_window`, `capture_screen`, and `do` screenshot actions now save images to temp files and return the file path instead of base64-encoded inline data. This avoids Claude Code's token limit on large MCP results. Use the Read tool to view the saved image.
+
 ## 1.2.0
 
 ### Features

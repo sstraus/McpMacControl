@@ -12,13 +12,14 @@ import (
 // The file is saved in the system temp directory with a timestamp-based name.
 // Uses WebP lossless by default, falls back to PNG if WebP fails.
 func SaveToFile(img image.Image, prefix string) (string, error) {
-	return SaveToFileWithFormat(img, prefix, FormatWebP)
+	return SaveToFileWithFormat(img, prefix, FormatWebP, 0)
 }
 
 // SaveToFileWithFormat saves the image to a file in the specified format.
-func SaveToFileWithFormat(img image.Image, prefix string, format ImageFormat) (string, error) {
+// quality controls compression (1-100, 0 = default). Ignored for PNG.
+func SaveToFileWithFormat(img image.Image, prefix string, format ImageFormat, quality int) (string, error) {
 	// Optimize the image
-	result, err := OptimizeImageWithFormat(img, format, 0)
+	result, err := OptimizeImageWithFormat(img, format, quality)
 	if err != nil {
 		return "", fmt.Errorf("failed to optimize image: %w", err)
 	}
@@ -66,8 +67,8 @@ func SaveWindowToFile(appName, windowTitle string, hideShadow bool) (string, *Wi
 	// and mouse events use points.
 	resized := ResizeToTarget(img, info.Width, info.Height)
 
-	prefix := sanitizeFilename(appName)
-	path, err := SaveToFileWithFormat(resized, prefix, FormatWebP)
+	prefix := SanitizeFilename(appName)
+	path, err := SaveToFileWithFormat(resized, prefix, FormatWebP, 0)
 	if err != nil {
 		return "", nil, err
 	}
@@ -75,8 +76,8 @@ func SaveWindowToFile(appName, windowTitle string, hideShadow bool) (string, *Wi
 	return path, info, nil
 }
 
-// sanitizeFilename removes characters that aren't safe for filenames.
-func sanitizeFilename(name string) string {
+// SanitizeFilename removes characters that aren't safe for filenames.
+func SanitizeFilename(name string) string {
 	result := make([]byte, 0, len(name))
 	for _, c := range name {
 		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {

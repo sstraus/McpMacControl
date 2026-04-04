@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -114,13 +113,11 @@ func normalizeAction(action *Action) (originalType string) {
 
 // ActionResult represents the result of a single action.
 type ActionResult struct {
-	Index     int    `json:"index"`
-	Type      string `json:"type"`
-	Success   bool   `json:"success"`
-	Message   string `json:"message,omitempty"`
-	Error     string `json:"error,omitempty"`
-	ImageData string `json:"-"` // base64 image data (screenshot actions only)
-	MIMEType  string `json:"-"` // image MIME type (screenshot actions only)
+	Index   int    `json:"index"`
+	Type    string `json:"type"`
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // ValidActionTypes lists all supported action types
@@ -1268,79 +1265,44 @@ func executeScreenshot(index int, action Action) ActionResult {
 			bounds.Dx(), bounds.Dy())
 	}
 
-	result, err := capture.OptimizeImageWithFormat(img, format, action.Quality)
+	// Save to temp file instead of returning base64 (avoids token limit issues)
+	prefix := "screen0"
+	if action.App != "" {
+		prefix = capture.SanitizeFilename(action.App)
+	}
+	filePath, err := capture.SaveToFileWithFormat(img, prefix, format, action.Quality)
 	if err != nil {
 		return ActionResult{
 			Index:   index,
 			Type:    "screenshot",
 			Success: false,
-			Error:   fmt.Sprintf("optimize failed: %v", err),
+			Error:   fmt.Sprintf("save failed: %v", err),
 		}
 	}
 
-	imageData := base64.StdEncoding.EncodeToString(result.Data)
-
 	return ActionResult{
-		Index:     index,
-		Type:      "screenshot",
-		Success:   true,
-		Message:   description,
-		ImageData: imageData,
-		MIMEType:  result.MIMEType,
+		Index:   index,
+		Type:    "screenshot",
+		Success: true,
+		Message: fmt.Sprintf("%s\nScreenshot saved to: %s\nUse the Read tool to view it.", description, filePath),
 	}
 }
 
 func formatResults(results []ActionResult) *mcp.CallToolResult {
-	hasImages := false
-	for _, r := range results {
-		if r.ImageData != "" {
-			hasImages = true
-			break
-		}
-	}
-
-	// Fast path: no images, return single text block (preserves existing behavior)
-	if !hasImages {
-		var sb strings.Builder
-		allSuccess := true
-		for _, r := range results {
-			if !r.Success {
-				allSuccess = false
-			}
-			if r.Success {
-				sb.WriteString(fmt.Sprintf("[%d] %s: %s\n", r.Index, r.Type, r.Message))
-			} else {
-				sb.WriteString(fmt.Sprintf("[%d] %s: ERROR\n%s\n", r.Index, r.Type, r.Error))
-			}
-		}
-		if !allSuccess && len(results) > 0 {
-			sb.WriteString("\nExecution stopped on first error.")
-		}
-		return mcp.NewToolResultText(sb.String())
-	}
-
-	// Mixed content: interleave text lines and images
-	var content []mcp.Content
+	var sb strings.Builder
 	allSuccess := true
 	for _, r := range results {
 		if !r.Success {
 			allSuccess = false
 		}
-
 		if r.Success {
-			content = append(content, mcp.NewTextContent(fmt.Sprintf("[%d] %s: %s", r.Index, r.Type, r.Message)))
+			sb.WriteString(fmt.Sprintf("[%d] %s: %s\n", r.Index, r.Type, r.Message))
 		} else {
-			content = append(content, mcp.NewTextContent(fmt.Sprintf("[%d] %s: ERROR\n%s", r.Index, r.Type, r.Error)))
-		}
-
-		if r.ImageData != "" {
-			content = append(content, mcp.NewImageContent(r.ImageData, r.MIMEType))
+			sb.WriteString(fmt.Sprintf("[%d] %s: ERROR\n%s\n", r.Index, r.Type, r.Error))
 		}
 	}
-
 	if !allSuccess && len(results) > 0 {
-		content = append(content, mcp.NewTextContent("Execution stopped on first error."))
+		sb.WriteString("\nExecution stopped on first error.")
 	}
-
-	return &mcp.CallToolResult{Content: content}
+	return mcp.NewToolResultText(sb.String())
 }

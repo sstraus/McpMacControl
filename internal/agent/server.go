@@ -13,7 +13,7 @@ import (
 )
 
 // Version is the agent protocol version.
-const Version = "1.0.0"
+const Version = "1.3.0"
 
 // Server is the agent's RPC server that dispatches requests.
 type Server struct {
